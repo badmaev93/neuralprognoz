@@ -1,0 +1,45 @@
+name: neuralprognoz
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+
+  - pytorch
+  - pytorch-cuda=11.8
+  - torchvision              
+  - torchaudio               
+
+  - scipy
+  - pandas
+  - matplotlib
+  - tqdm
+  - numba
+  - h5py
+  - hdf5
+  - netcdf4
+  - xarray
+  - rioxarray
+  - geopandas
+  - rasterio                
+  - earthengine-api          
+  - bokeh
+  - ruamel.yaml
+
+  - jupyter
+  - pytest
+  - pytest-cov
+  - sphinx
+  - yapf
+
+  - pip:
+    - tensorboard
+    - sphinx-rtd-theme
+    - nbsphinx
+    - nbsphinx-link
+    - xlsxwriter             
+    - parso==0.8.0           
+    - pykan                  
