@@ -15,31 +15,31 @@ from neuralprognoz.utils.config import Config
 
 
 class CustomLSTM(BaseModel):
-    """A custom implementation of the LSTM with support for a dedicated embedding network.
+    """Пользовательская реализация LSTM с поддержкой выделенной сети встраивания.
 
-    The idea of this model is mainly to be used as an analytical tool, where you can train a model using the optimized
-    `CudaLSTM` or `EmbCudaLSTM` classes, and later copy the weights into this model for a more in-depth network
-    analysis (e.g. inspecting model states or gate activations). The advantage of this implementation is that it returns
-    the entire time series of state vectors and gate activations.
-    However, you can also use this model class for training but note that it will be considerably slower than its
-    optimized counterparts. Depending on the embedding settings, static and/or dynamic features may or may not be fed
-    through embedding networks before being concatenated and passed through the LSTM.
+    Идея этой модели заключается в том, чтобы в основном использоваться в качестве аналитического инструмента, где вы можете обучить модель, используя оптимизированные
+    классы `CudaLSTM` или `EmbCudaLSTM`, а затем скопировать веса в эту модель для более глубокого анализа сети
+    (например, проверки состояний модели или активаций ворот). Преимущество этой реализации заключается в том, что она возвращает
+    всю временную серию векторов состояний и активаций ворот.
+    Однако вы также можете использовать этот класс модели для обучения, но обратите внимание, что он будет значительно медленнее, чем его
+    оптимизированные аналоги. В зависимости от настроек встраивания, статические и/или динамические признаки могут или не могут быть переданы
+    через сети встраивания перед тем, как быть объединенными и переданными через LSTM.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    Example
+    Пример
     -------
-    >>> # Example for copying the weights of an optimzed `CudaLSTM` or `EmbCudaLSTM` into a `CustomLSTM` instance
-    >>> cfg = ... # A config instance corresponding to the original, optimized model
-    >>> optimized_lstm = ... # A model instance of `CudaLSTM` or `EmbCudaLSTM`
+    >>> # Пример копирования весов оптимизированного `CudaLSTM` или `EmbCudaLSTM` в экземпляр `CustomLSTM`
+    >>> cfg = ... # Экземпляр конфигурации, соответствующий исходной, оптимизированной модели
+    >>> optimized_lstm = ... # Экземпляр модели `CudaLSTM` или `EmbCudaLSTM`
     >>>
-    >>> # Use the original config to initialize this model to differentiate between `CudaLSTM` and `EmbCudaLSTM`
+    >>> # Используйте исходную конфигурацию для инициализации этой модели, чтобы различать `CudaLSTM` и `EmbCudaLSTM`
     >>> custom_lstm = CustomLSTM(cfg=cfg)
     >>>
-    >>> # Copy weights into the `LSTM` instance.
+    >>> # Скопируйте веса в экземпляр `LSTM`.
     >>> custom_lstm.copy_weights(optimized_lstm)
     """
 
@@ -62,28 +62,28 @@ class CustomLSTM(BaseModel):
                 data: dict[str, torch.Tensor | dict[str, torch.Tensor]],
                 h_0: torch.Tensor = None,
                 c_0: torch.Tensor = None) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the LSTM model.
+        """Выполняет прямой проход через модель LSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pair.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
         h_0 : torch.Tensor, optional
-            Initial hidden state, by default 0.
+            Начальное скрытое состояние, по умолчанию 0.
         c_0 : torch.Tensor, optional
-            Initial cell state, by default 0.
+            Начальное состояние ячейки, по умолчанию 0.
 
         Returns
         -------
         Dict[str, torch.Tensor]
-            Model output and all intermediate states and gate activations as a dictionary.
+            Выходные данные модели и все промежуточные состояния и активации ворот в виде словаря.
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, передать динамические и статические входные данные через слои встраивания, затем объединить их
         x_d = self.embedding_net(data, concatenate_output=True)
 
         seq_len, batch_size, _ = x_d.size()
 
-        # TODO: move hidden and cell state initialization to init and only reset states in forward pass to zero.
+        # TODO: переместить инициализацию скрытого и ячеечного состояний в init и сбрасывать состояния в прямом проходе до нуля.
         if h_0 is None:
             h_0 = x_d.data.new(batch_size, self._hidden_size).zero_()
         if c_0 is None:
@@ -100,34 +100,34 @@ class CustomLSTM(BaseModel):
             for key, cell_out in cell_output.items():
                 output[key].append(cell_out)
 
-        # stack to [batch size, sequence length, hidden size]
+        # стек в [batch size, sequence length, hidden size]
         pred = {key: torch.stack(val, 1) for key, val in output.items()}
         pred.update(self.head(self.dropout(pred['h_n'])))
         return pred
 
     def copy_weights(self, optimized_lstm: Union[CudaLSTM, EmbCudaLSTM]):
-        """Copy weights from a `CudaLSTM` or `EmbCudaLSTM` into this model class
+        """Копирует веса из `CudaLSTM` или `EmbCudaLSTM` в этот класс модели
 
-        Parameters
+        Параметры
         ----------
         optimized_lstm : Union[CudaLSTM, EmbCudaLSTM]
-            Model instance of a `CudaLSTM` (neuralprognoz.modelzoo.cudalstm) or `EmbCudaLSTM`
+            Экземпляр модели `CudaLSTM` (neuralprognoz.modelzoo.cudalstm) или `EmbCudaLSTM`
             (neuralprognoz.modelzoo.embcudalstm).
             
-        Raises
+        Вызывает
         ------
         RuntimeError
-            If `optimized_lstm` is an `EmbCudaLSTM` but this model instance was not created with an embedding network.
+            Если `optimized_lstm` является `EmbCudaLSTM`, но этот экземпляр модели не был создан с сетью встраивания.
         """
 
         assert isinstance(optimized_lstm, CudaLSTM) or isinstance(optimized_lstm, EmbCudaLSTM)
 
         self.embedding_net.load_state_dict(optimized_lstm.embedding_net.state_dict())
 
-        # copy lstm cell weights
+        # копирование весов ячейки lstm
         self.cell.copy_weights(optimized_lstm.lstm, layer=0)
 
-        # copy weights of head
+        # копирование весов головы
         self.head.load_state_dict(optimized_lstm.head.state_dict())
 
 
@@ -149,7 +149,7 @@ class _LSTMCell(nn.Module):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Специальная инициализация определенных весов модели."""
         stdv = math.sqrt(3 / self.hidden_size)
         for weight in self.parameters():
             if len(weight.shape) > 1:

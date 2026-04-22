@@ -10,23 +10,23 @@ from neuralprognoz.utils.config import Config
 
 
 class CudaLSTM(BaseModel):
-    """LSTM model class, which relies on PyTorch's CUDA LSTM class.
+    """Класс модели LSTM, основанный на классе LSTM PyTorch CUDA.
 
-    This class implements the standard LSTM combined with a model head, as specified in the config. Depending on the
-    embedding settings, static and/or dynamic features may or may not be fed through embedding networks before being
-    concatenated and passed through the LSTM.
-    To control the initial forget gate bias, use the config argument `initial_forget_bias`. Often it is useful to set
-    this value to a positive value at the start of the model training, to keep the forget gate closed and to facilitate
-    the gradient flow.
-    The `CudaLSTM` class only supports single-timescale predictions. Use `MTSLSTM` to train a model and get
-    predictions on multiple temporal resolutions at the same time.
+    Этот класс реализует стандартный LSTM в сочетании с моделью, как указано в конфигурации. В зависимости от
+    настроек встраивания, статические и/или динамические признаки могут или не могут быть переданы через сети встраивания перед тем, как быть объединенными и переданными через LSTM.
+    Чтобы контролировать начальный наклон забывающих ворот, используйте аргумент конфигурации `initial_forget_bias`. Часто полезно установить
+    это значение в положительное значение в начале обучения модели, чтобы держать забывающие ворота закрытыми и облегчить
+    поток градиента.
+    Класс `CudaLSTM` поддерживает только прогнозы в одном временном масштабе. Используйте `MTSLSTM` для обучения модели и получения
+    прогнозов на нескольких временных разрешениях одновременно.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # укажите подмодули модели, которые позже можно будет использовать для дообучения (finetuning).
+    # Имена должны совпадать с атрибутами класса
     module_parts = ['embedding_net', 'lstm', 'head']
 
     def __init__(self, cfg: Config):
@@ -43,31 +43,31 @@ class CudaLSTM(BaseModel):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Особая инициализация некоторых весов модели."""
         if self.cfg.initial_forget_bias is not None:
             self.lstm.bias_hh_l0.data[self.cfg.hidden_size:2 * self.cfg.hidden_size] = self.cfg.initial_forget_bias
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the CudaLSTM model.
+        """Выполняет прямой проход через модель CudaLSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - `y_hat`: model predictions of shape [batch size, sequence length, number of target variables].
-                - `h_n`: hidden state at the last time step of the sequence of shape [batch size, 1, hidden size].
-                - `c_n`: cell state at the last time step of the sequence of shape [batch size, 1, hidden size].
+            Словарь, содержащий выходные данные модели и промежуточные состояния.
+                - `y_hat`: прогнозы модели формы [batch size, sequence length, number of target variables].
+                - `h_n`: скрытое состояние в последнем временном шаге последовательности формы [batch size, 1, hidden size].
+                - `c_n`: состояние ячейки в последнем временном шаге последовательности формы [batch size, 1, hidden size].
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, передать динамические и статические входы через слои встраивания, затем объединить их
         x_d = self.embedding_net(data)
         lstm_output, (h_n, c_n) = self.lstm(input=x_d)
 
-        # reshape to [batch_size, seq, n_hiddens]
+        # изменить форму на [batch_size, seq, n_hiddens]
         lstm_output = lstm_output.transpose(0, 1)
         h_n = h_n.transpose(0, 1)
         c_n = c_n.transpose(0, 1)

@@ -21,7 +21,7 @@ class PIKLA(BaseModel):
     Эта модель реализует основную часть архитектуры из статьи Zhou & Liu (2025),
     но без двухэтапной компенсации остатков для упрощения интеграции.
     """
-    # Части модели для возможной тонкой настройки
+    # Части модели для тонкой настройки
     module_parts = ['input_layer', 'kan_feature_extractor', 'lstm', 'attention', 'head']
 
     def __init__(self, cfg: Config):

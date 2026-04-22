@@ -14,26 +14,26 @@ LOGGER = logging.getLogger(__name__)
 _EMBEDDING_TYPES = ['full_model', 'hindcast', 'forecast']
 
 class InputLayer(nn.Module):
-    """Input layer to preprocess static and dynamic inputs.
+    """Входной слой для предварительной обработки статических и динамических входов.
 
-    This module provides optional embedding of dynamic and static inputs. If ``dynamic_embeddings`` or
-    ``static_embeddings`` are specified as dictionaries in the config, a fully-connected embedding network will be
-    prepended to the timeseries model. The dictionaries have the following keys:
+    Этот модуль предоставляет необязательное встраивание (embedding) динамических и статических входов. Если ``dynamic_embeddings`` или
+    ``static_embeddings`` указаны в виде словарей в конфигурации, то перед временной моделью будет вставлена полносвязная сеть встраивания.
+    Словари имеют следующие ключи:
 
-    - ``type`` (default 'fc'): Type of the embedding net. Currently, only 'fc' for fully-connected net is supported.
-    - ``hiddens``: List of integers that define the number of neurons per layer in the fully connected network.
-      The last number is the number of output neurons. Must have at least length one.
-    - ``activation`` (default 'tanh'): activation function of the network. Supported values are 'tanh', 'sigmoid',
-      'linear'. The activation function is not applied to the output neurons, which always have a linear activation
-      function. An activation function for the output neurons has to be applied in the main model class.
-    - ``dropout`` (default 0.0): Dropout rate applied to the embedding network.
+    - ``type`` (default 'fc'): Тип сети встраивания. В настоящее время поддерживается только 'fc' для полносвязной сети.
+    - ``hiddens``: Список целых чисел, определяющих количество нейронов в каждом слое полносвязной сети.
+      Последнее число — это количество выходных нейронов. Должен иметь длину не менее одного.
+    - ``activation`` (default 'tanh'): функция активации сети. Поддерживаемые значения: 'tanh', 'sigmoid',
+      'linear'. Функция активации не применяется к выходным нейронам, которые всегда имеют линейную активацию
+      функция. Функция активации для выходных нейронов должна быть применена в основном классе модели.
+    - ``dropout`` (default 0.0): Коэффициент отсечения (Dropout rate) применяется к сети встраивания.
 
-    Note that this module does not support multi-frequency runs.
+    Примечание: этот модуль не поддерживает многочастотные запуски.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration
+        Конфигурация запуска
     """
 
     def __init__(self, cfg: Config, embedding_type: str = 'full_model'):
@@ -51,25 +51,25 @@ class InputLayer(nn.Module):
             self._x_d_key = 'x_d_hindcast'
         else:
             raise ValueError(
-                f'Embedding type {embedding_type} is not recognized. '
-                f'Must be one of: {_EMBEDDING_TYPES}.'
+                f'Тип встраивания {embedding_type} не распознан. '
+                f'Должен быть одним из: {_EMBEDDING_TYPES}.'
             )
         if isinstance(dynamic_inputs, dict):
             if self.nan_handling_method:
-                raise ValueError('InputLayer does not support nan handling methods with multiple frequencies.')
+                raise ValueError('InputLayer не поддерживает методы обработки NaN с несколькими частотами.')
             frequencies = list(dynamic_inputs.keys())
             if len(frequencies) > 1:
-                raise ValueError('InputLayer only supports single-frequency data')
+                raise ValueError('InputLayer поддерживает только одночастотные данные')
             dynamics_input_sizes = [len(dynamic_inputs[frequencies[0]])]
             self._dynamic_inputs = {k: [v] for k, v in dynamic_inputs.items()}
         else:
             if isinstance(dynamic_inputs[0], str):
-                # Put all features into a single feature group.
+                # Объединить все признаки в одну группу признаков.
                 self._dynamic_inputs = [dynamic_inputs]
             else:
                 self._dynamic_inputs = dynamic_inputs
             if cfg.timestep_counter:
-                # Add timestep counter to each feature group.
+                # Добавить счетчик временных шагов в каждую группу признаков.
                 if self.embedding_type == 'hindcast':
                     self._dynamic_inputs = [group + ['hindcast_counter'] for group in self._dynamic_inputs]
                 elif self.embedding_type == 'forecast':
@@ -78,7 +78,7 @@ class InputLayer(nn.Module):
             self.attention = None
             self._nan_fill_value = 0.0
             if self.nan_handling_method == 'input_replacing':
-                # +1 for the NaN flag.
+                # +1 для флага NaN.
                 dynamics_input_sizes = [sum(len(group) + 1
                                             for group in self._dynamic_inputs) + cfg.nan_handling_pos_encoding_size]
             elif self.nan_handling_method in ['masked_mean', 'attention']:
@@ -109,7 +109,7 @@ class InputLayer(nn.Module):
         self._pos_enc = None
         if cfg.nan_handling_pos_encoding_size > 0:
             if not self.nan_handling_method:
-                raise NotImplementedError('Positional encoding is only supported for nan handling methods.')
+                raise NotImplementedError('Кодирование позиции поддерживается только для методов обработки NaN.')
             self._pos_enc = PositionalEncoding(embedding_dim=cfg.nan_handling_pos_encoding_size,
                                               position_type='concatenate',
                                               dropout=0.0,
@@ -125,8 +125,8 @@ class InputLayer(nn.Module):
             dynamics_output_sizes.append(group_output_size)
         self.dynamics_embeddings = nn.ModuleList(dynamics_embeddings)
         if not all(size == dynamics_output_sizes[0] for size in dynamics_output_sizes):
-            raise ValueError('All dynamics embedding output sizes must be equal.')
-        # All output sizes are the same, just use the first one.
+            raise ValueError('Все выходные размеры встраивания динамических данных должны быть одинаковыми.')
+        # Все выходные размеры одинаковы, просто используем первый.
         self.dynamics_output_size = dynamics_output_sizes[0]
         if self.nan_handling_method == 'attention':
             self.attention = nn.MultiheadAttention(embed_dim=self.dynamics_output_size, num_heads=1)
@@ -137,11 +137,11 @@ class InputLayer(nn.Module):
                                             'query')
 
         if cfg.statics_embedding is None:
-            self.statics_embedding_p_dropout = 0.0  # if net has no statics dropout we treat is as zero
+            self.statics_embedding_p_dropout = 0.0  # если сеть не имеет dropout статических данных, мы рассматриваем это как ноль
         else:
             self.statics_embedding_p_dropout = cfg.statics_embedding['dropout']
         if cfg.dynamics_embedding is None:
-            self.dynamics_embedding_p_dropout = 0.0  # if net has no dynamics dropout we treat is as zero
+            self.dynamics_embedding_p_dropout = 0.0  # если сеть не имеет dropout динамических данных, мы рассматриваем это как ноль
         else:
             self.dynamics_embedding_p_dropout = cfg.dynamics_embedding['dropout']
 
@@ -150,37 +150,37 @@ class InputLayer(nn.Module):
 
     @staticmethod
     def _get_embedding_net(embedding_spec: Optional[dict], input_size: int, purpose: str) -> Tuple[nn.Module, int]:
-        """Get an embedding net following the passed specifications.
+        """Получить сеть встраивания в соответствии с переданными спецификациями.
 
-        If the `embedding_spec` is None, the returned embedding net will be the identity function.
+        Если `embedding_spec` равен None, возвращаемая сеть встраивания будет тождественной функцией.
 
-        Parameters
+        Параметры
         ----------
         embedding_spec : Optional[dict]
-            Specification of the embedding net from the run configuration or None.
+            Спецификация сети встраивания из конфигурации запуска или None.
         input_size : int
-            Size of the inputs into the embedding network.
+            Размер входов в сеть встраивания.
         purpose : str
-            Purpose of the embedding network, used for error messages.
+            Назначение сети встраивания, используется для сообщений об ошибках.
 
-        Returns
+        Возвращает
         -------
         Tuple[nn.Module, int]
-            The embedding net and its output size.
+            Сеть встраивания и ее выходной размер.
         """
         if embedding_spec is None:
             return nn.Identity(), input_size
 
         if input_size == 0:
-            raise ValueError(f'Cannot create {purpose} embedding layer with input size 0')
+            raise ValueError(f'Невозможно создать слой встраивания {purpose} с входным размером 0')
 
         emb_type = embedding_spec['type'].lower()
         if emb_type != 'fc':
-            raise ValueError(f'{purpose} embedding type {emb_type} not supported.')
+            raise ValueError(f'Тип встраивания {emb_type} для {purpose} не поддерживается.')
 
         hiddens = embedding_spec['hiddens']
         if len(hiddens) == 0:
-            raise ValueError(f'{purpose} embedding "hiddens" must be a list of hidden sizes with at least one entry')
+            raise ValueError(f'Список скрытых размеров "hiddens" для {purpose} должен содержать хотя бы один элемент')
 
         dropout = embedding_spec['dropout']
         activation = embedding_spec['activation']
@@ -190,21 +190,20 @@ class InputLayer(nn.Module):
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]], concatenate_output: bool = True) \
             -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        """Perform a forward pass on the input layer.
+        """Выполнить прямой проход на входном слое.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            The input data.
+            Входные данные.
         concatenate_output : bool, optional
-            If True (default), the forward method will concatenate the static inputs to each dynamic time step.
-            If False, the forward method will return a tuple of (dynamic, static) inputs.
+            Если True (по умолчанию), прямой проход будет конкатенировать статические входы с каждым временным шагом динамических данных.
+            Если False, прямой проход вернет кортеж из (динамических, статических) входов.
 
-        Returns
+        Возвращает
         -------
         Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
-            If `concatenate_output` is True, a single tensor is returned. Else, a tuple with one tensor of dynamic
-            inputs and one tensor of static inputs.
+            Если `concatenate_output` истинно, возвращается единый тензор. В противном случае возвращается кортеж из одного тензора динамических входов и одного тензора статических входов.
         """
         features = self._dynamic_inputs
         if isinstance(features, dict):
@@ -230,7 +229,7 @@ class InputLayer(nn.Module):
         elif self.nan_handling_method == 'input_replacing':
             dynamics_out = self._input_replacing_embedding(data[self._x_d_key])
         else:
-            # transpose to [seq_length, batch_size, n_features]
+            # транспонирование в [seq_length, batch_size, n_features]
             x_d = torch.cat([data[self._x_d_key][k] for k in itertools.chain(*features)], dim=-1).transpose(0, 1)
             dynamics_out = self.dynamics_embeddings[0](x_d)
 
@@ -243,8 +242,8 @@ class InputLayer(nn.Module):
             else:
                 ret_val = dynamics_out
 
-            # Append autoregressive inputs to the end of the output.
-            # Don't run autoregressive inputs through the embedding layer. This does not work with NaN's.
+            # Добавление авторегрессионных входов в конец выхода.
+            # Авторегрессионные входы не проходят через слой встраивания. Это не работает с NaN.
             if self._num_autoregression_inputs:
                 x_autoregressive = torch.cat([data[self._x_d_key][k]
                                               for k in self.cfg.autoregressive_inputs], dim=-1).transpose(0, 1)
@@ -253,23 +252,23 @@ class InputLayer(nn.Module):
         return ret_val
 
     def _attention(self, x_d: dict[str, torch.Tensor], statics_embedding: torch.Tensor | None) -> torch.Tensor:
-        """Attention mechanism with statics + positional encoding as query, feature groups as keys and values."""
+        """Механизм внимания со статическими + позиционным кодированием в качестве запроса, группами признаков в качестве ключей и значений."""
         if statics_embedding is None:
-            raise ValueError('Attention requires static features.')
+            raise ValueError('Внимание требует статических признаков.')
 
         dynamics_out = []
         masks = []
         for idx, feature_group in enumerate(self._dynamic_inputs):
-            # transpose to [seq_length, batch_size, n_features]
+            # транспонирование в [seq_length, batch_size, n_features]
             x_d_group = torch.cat([x_d[k] for k in feature_group], dim=-1).transpose(0, 1)
             mask = x_d_group.isnan().any(dim=-1, keepdim=True)
-            # Set NaNs to zero to avoid NaN gradients. The zeros will be ignored by the attention mask.
+            # Установка NaN в ноль для предотвращения NaN градиентов. Нули будут проигнорированы маской внимания.
             x_d_group = torch.where(mask, 0.0, x_d_group)
             group_embedding = self.dynamics_embeddings[idx](x_d_group)
             dynamics_out.append(torch.where(mask, torch.nan, group_embedding))
             masks.append(mask)
         dynamics_out = torch.stack(dynamics_out, dim=0)
-        # Make sure we have something to return even if all values are NaN.
+        # Убедитесь, что есть что вернуть, даже если все значения - NaN.
         dynamics_out = torch.where(torch.isnan(dynamics_out).all(dim=0, keepdim=True),
                                    self._nan_fill_value, dynamics_out)
 
@@ -298,32 +297,32 @@ class InputLayer(nn.Module):
         return attention_out.view(1, seq_len, batch_size, embed_dim).squeeze(0)
 
     def _masked_mean_embedding(self, x_d: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Performs masked mean embedding on the input data."""
+        """Выполняет masked mean embedding на входных данных."""
         dynamics_out = []
         masks = []
         for idx, feature_group in enumerate(self._dynamic_inputs):
-            # transpose to [seq_length, batch_size, n_features]
+            # транспонирование в [seq_length, batch_size, n_features]
             x_d_group = torch.cat([x_d[k] for k in feature_group], dim=-1).transpose(0, 1)
             mask = x_d_group.isnan().any(dim=-1, keepdim=True)
             if self._pos_enc is not None:
                 x_d_group = self._pos_enc(x_d_group)
-            # Set NaNs to zero to avoid NaN gradients.
+            # Установка NaN в ноль для предотвращения NaN градиентов.
             x_d_group = torch.where(mask, 0.0, x_d_group)
             group_embedding = self.dynamics_embeddings[idx](x_d_group)
-            # Set zeros back to NaN so they are ignored in the mean.
+            # Установка нулей обратно в NaN, чтобы они были проигнорированы в среднем.
             dynamics_out.append(torch.where(mask, torch.nan, group_embedding))
             masks.append(mask)
         dynamics_out = torch.stack(dynamics_out, dim=0)
-        # Make sure the mean works even if all values are NaN.
+        # Убедитесь, что среднее работает, даже если все значения - NaN.
         dynamics_out = torch.where(torch.isnan(dynamics_out).all(dim=0, keepdim=True),
                                    self._nan_fill_value, dynamics_out)
         return torch.nanmean(dynamics_out, dim=0)
 
     def _input_replacing_embedding(self, x_d: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Adds input masks to the inputs and sets NaNs to zero."""
+        """Добавляет маски входов к входам и устанавливает NaN в ноль."""
         dynamics = []
         for feature_group in self._dynamic_inputs:
-            # transpose to [seq_length, batch_size, n_features]
+            # транспонирование в [seq_length, batch_size, n_features]
             x_d_group = torch.cat([x_d[k] for k in feature_group], dim=-1).transpose(0, 1)
             mask = x_d_group.isnan().any(dim=-1, keepdim=True)
             x_d_group = torch.where(mask, self._nan_fill_value, x_d_group)
@@ -335,10 +334,10 @@ class InputLayer(nn.Module):
         return self.dynamics_embeddings[0](dynamics)
 
     def __getitem__(self, item: str) -> nn.Module:
-        # required for dict-like access when freezing submodules' gradients in fine-tuning
+        # требуется для доступа в виде словаря при замораживании градиентов подмодулей при дообучении
         if item == "statics_embedding":
             return self.statics_embedding
         elif item == "dynamics_embedding":
             return self.dynamics_embedding
         else:
-            raise KeyError(f"Cannot access {item} on InputLayer")
+            raise KeyError(f"Невозможно получить доступ к {item} в InputLayer")

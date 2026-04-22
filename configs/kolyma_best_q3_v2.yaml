@@ -1,0 +1,60 @@
+
+experiment_name: kolyma_best_q3_forecast_v2
+dataset: generic
+data_dir: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset
+device: cuda:0
+seed: 42
+num_workers: 0
+
+train_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/train_basins.txt
+validation_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/validation_basins.txt
+test_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/test_basins.txt
+
+train_start_date: ['01/01/1950']
+train_end_date: ['31/12/2010']
+
+validation_start_date: ['01/01/2011']
+validation_end_date: ['31/12/2014']
+
+test_start_date: ['01/01/2015']
+test_end_date: ['31/12/2025'] 
+
+target_variables: ['streamflow']
+dynamic_inputs: 
+  - precipitation
+  - temperature_mean
+  - temperature_min
+  - temperature_max
+  - snowfall
+  - snowmelt
+  - pet_priestley_taylor
+  - month_sin
+  - month_cos
+  - p_rolling_3m
+  - t_rolling_3m
+
+model: cudalstm
+head: regression
+hidden_size: 256
+output_dropout: 0.4
+
+optimizer: AdamW
+loss: MaskedHybridDiffLoss
+learning_rate: 0.001
+batch_size: 64
+
+epochs: 40
+clip_gradient_norm: 1.0
+
+seq_length: 24
+predict_last_n: 3 
+
+metrics:
+  - NSE
+  - RMSE
+  - S/sigma_delta
+
+save_validation_results: True
+validate_every: 1
+save_weights_every: 1
+log_tensorboard: True

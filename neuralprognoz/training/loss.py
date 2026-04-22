@@ -227,7 +227,7 @@ class MaskedNSELoss(BaseLoss):
     eps: float, optional
         Маленькая константа для численной устойчивости.
 
-    References
+    Ссылки
     ----------
     .. [#] Kratzert, F., Klotz, D., Shalev, G., Klambauer, G., Hochreiter, S., and Nearing, G.: "Towards learning
        universal, regional, and local hydrological behaviors via machine learning applied to large-sample datasets"
@@ -274,7 +274,7 @@ class MaskedGMMLoss(BaseLoss):
     eps : float, optional
         Маленькая константа для численной устойчивости.
 
-    References
+    Ссылки
     ----------
     .. [#] D. Ha: Mixture density networks with tensorflow. blog.otoro.net, 
            URL: http://blog.otoro.net/2015/11/24/mixture-density-networks-with-tensorflow, 2015.
@@ -400,7 +400,6 @@ def _get_predict_last_n(cfg: Config) -> dict:
 
 
     return predict_last_n
-# --- ДОБАВИТЬ В КОНЕЦ ФАЙЛА loss.py ---
 
 class MaskedSSigmaDeltaLoss(BaseLoss):
     """

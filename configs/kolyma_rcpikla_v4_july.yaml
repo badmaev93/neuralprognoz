@@ -1,0 +1,79 @@
+experiment_name: kolyma_rcpikla_v4_july
+dataset: generic
+data_dir: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset
+device: cpu
+seed: 42
+num_workers: 0
+
+train_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/train_basins.txt
+validation_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/validation_basins.txt
+test_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/test_basins.txt
+
+train_start_date: ['01/01/1950']
+train_end_date:   ['31/12/2010']
+validation_start_date: ['01/01/2011']
+validation_end_date:   ['31/12/2014']
+test_start_date: ['01/01/2015']
+test_end_date:   ['30/09/2024']
+
+target_variables: ['streamflow']
+dynamic_inputs:
+  - precipitation
+  - temperature_mean
+  - snowmelt
+  - pet_priestley_taylor
+  - sdwe
+  - p_rolling_3m
+  - precip_lag_1m
+  - t_rolling_3m
+  - month_sin
+  - month_cos
+
+model: rcpikla
+head: regression
+
+hidden_size: 64
+output_dropout: 0.2
+kan_hidden_features: 32
+kan_grid_size: 3
+kan_spline_order: 2
+attention_heads: 4
+
+temperature_variable: temperature_mean
+precipitation_variable: precipitation
+precip_feature_idx: 0
+temp_feature_idx: 1
+
+optimizer: AdamW
+loss: JulyWeightedPhysicsLoss
+phys_loss_alpha: 1.0
+phys_loss_beta: 0.5
+summer_loss_gamma: 1.5
+july_loss_weight: 4.0
+
+learning_rate:
+  0:  0.001
+  20: 0.0005
+  40: 0.0002
+  60: 0.0001
+batch_size: 64
+epochs: 100
+clip_gradient_norm: 1.0
+
+seq_length: 18
+predict_last_n: 3
+
+early_stopping: True
+patience_early_stopping: 15
+minimum_epochs_before_early_stopping: 30
+dynamic_learning_rate: False
+
+metrics:
+  - S/sigma_delta
+  - NSE
+  - RMSE
+
+save_validation_results: True
+validate_every: 1
+save_weights_every: 5
+log_tensorboard: False

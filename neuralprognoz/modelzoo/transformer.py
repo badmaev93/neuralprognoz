@@ -15,63 +15,63 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Transformer(BaseModel):
-    """Transformer model class, which relies on PyTorch's TransformerEncoder class.
+    """Класс модели Трансформер, который полагается на класс TransformerEncoder из PyTorch.
 
-    This class implements the encoder of a transformer network which can be used for regression.
-    Unless the number of inputs is divisible by the number of transformer heads (``transformer_nheads``), it is
-    necessary to use an embedding network that guarantees this. To achieve this, use ``statics/dynamics_embedding``,
-    so the static/dynamic inputs will be passed through embedding networks before being concatenated. The embedding
-    network will then map the static and dynamic features to size ``statics/dynamics_embedding['hiddens'][-1]``, so the
-    total embedding size will be the sum of these values.
-    The model configuration is specified in the config file using the following options:
+    Этот класс реализует кодировщик сети трансформера, который может быть использован для регрессии.
+    Если количество входов не делится на количество голов трансформера (``transformer_nheads``), необходимо
+    использовать сеть встраивания, которая это гарантирует. Для этого используйте ``statics/dynamics_embedding``,
+    так что статические/динамические входы будут проходить через сети встраивания перед конкатенацией. Сеть встраивания
+    затем отобразит статические и динамические признаки в размер ``statics/dynamics_embedding['hiddens'][-1]``, так что
+    общий размер встраивания будет суммой этих значений.
+    Конфигурация модели указывается в файле конфигурации с использованием следующих параметров:
 
-    * ``transformer_positional_encoding_type``: choices to "sum" or "concatenate" positional encoding to other model
-      inputs.
-    * ``transformer_positional_dropout``: fraction of dropout applied to the positional encoding.
-    * ``seq_length``: integer number of timesteps to treat in the input sequence.
-    * ``transformer_nheads``: number of self-attention heads.
-    * ``transformer_dim_feedforward``: dimension of the feed-forward networks between self-attention heads.
-    * ``transformer_dropout``: dropout in the feedforward networks between self-attention heads.
-    * ``transformer_nlayers``: number of stacked self-attention + feedforward layers.
+    * ``transformer_positional_encoding_type``: варианты "sum" или "concatenate" позиционного кодирования к другим
+      входам модели.
+    * ``transformer_positional_dropout``: коэффициент отсева, применяемый к позиционному кодированию.
+    * ``seq_length``: целое число временных шагов для обработки во входной последовательности.
+    * ``transformer_nheads``: количество голов самовнимания.
+    * ``transformer_dim_feedforward``: размерность полносвязных сетей между головами самовнимания.
+    * ``transformer_dropout``: коэффициент отсева в полносвязных сетях между головами самовнимания.
+    * ``transformer_nlayers``: количество слоев самовнимания + полносвязных слоев.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # определить субмодули модели, которые могут быть использованы для дообучения. Имена должны совпадать с атрибутами класса
     module_parts = ['embedding_net', 'encoder', 'head']
 
     def __init__(self, cfg: Config):
         super(Transformer, self).__init__(cfg=cfg)
 
-        # embedding net before transformer
+        # сеть встраивания перед трансформером
         self.embedding_net = InputLayer(cfg)
 
-        # ensure that the number of inputs into the self-attention layer is divisible by the number of heads
+        # убедиться, что количество входов в слой самовнимания делится на количество голов
         if self.embedding_net.output_size % cfg.transformer_nheads != 0:
-            raise ValueError("Embedding dimension must be divisible by number of transformer heads. "
-                             "Use statics_embedding/dynamics_embedding and embedding_hiddens to specify the embedding.")
+            raise ValueError("Размер встраивания должен делиться на количество голов трансформера. "
+                             "Используйте statics_embedding/dynamics_embedding и embedding_hiddens для указания встраивания.")
 
         self._sqrt_embedding_dim = math.sqrt(self.embedding_net.output_size)
 
-        # positional encoder
+        # позиционный кодировщик
         self._positional_encoding_type = cfg.transformer_positional_encoding_type
         if self._positional_encoding_type.lower() == 'concatenate':
             encoder_dim = self.embedding_net.output_size * 2
         elif self._positional_encoding_type.lower() == 'sum':
             encoder_dim = self.embedding_net.output_size
         else:
-            raise RuntimeError(f"Unrecognized positional encoding type: {self._positional_encoding_type}")
+            raise RuntimeError(f"Нераспознанный тип позиционного кодирования: {self._positional_encoding_type}")
         self.positional_encoder = PositionalEncoding(embedding_dim=self.embedding_net.output_size,
                                                       dropout=cfg.transformer_positional_dropout,
                                                       position_type=cfg.transformer_positional_encoding_type,
                                                       max_len=cfg.seq_length)
 
-        # positional mask
+        # позиционная маска
         self._mask = None
 
-        # encoder
+        # энкодер
         encoder_layers = nn.TransformerEncoderLayer(d_model=encoder_dim,
                                                     nhead=cfg.transformer_nheads,
                                                     dim_feedforward=cfg.transformer_dim_feedforward,
@@ -80,15 +80,15 @@ class Transformer(BaseModel):
                                              num_layers=cfg.transformer_nlayers,
                                              norm=None)
 
-        # head (instead of a decoder)
+        # выходной слой (вместо декодера)
         self.dropout = nn.Dropout(p=cfg.output_dropout)
         self.head = get_head(cfg=cfg, n_in=encoder_dim, n_out=self.output_size)
 
-        # init weights and biases
+        # инициализация весов и смещений
         self._reset_parameters()
 
     def _reset_parameters(self):
-        # this initialization strategy was tested empirically but may not be the universally best strategy in all cases.
+        # эта стратегия инициализации была протестирована эмпирически, но может не быть универсально лучшей стратегией во всех случаях.
         initrange = 0.1
         for layer in self.encoder.layers:
             layer.linear1.weight.data.uniform_(-initrange, initrange)
@@ -97,35 +97,35 @@ class Transformer(BaseModel):
             layer.linear2.bias.data.zero_()
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on a transformer model without decoder.
+        """Прямой проход через модель Трансформер без декодера.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - `y_hat`: model predictions of shape [batch size, sequence length, number of target variables].
+            Выходные данные модели и промежуточные состояния в виде словаря.
+                - `y_hat`: предсказания модели формы [размер батча, число временных шагов, число целевых переменных].
         """
-        # pass dynamic and static inputs through embedding layers, then concatenate them
+        # пропустить динамические и статические входы через слои встраивания, затем объединить их
         x_d = self.embedding_net(data)
 
         positional_encoding = self.positional_encoder(x_d * self._sqrt_embedding_dim)
 
-        # mask out future values
+        # маскировать будущие значения
         if self._mask is None or self._mask.size(0) != len(x_d):
             self._mask = torch.triu(x_d.new_full((len(x_d), len(x_d)), fill_value=float('-inf')), diagonal=1)
 
-        # encoding
+        # кодирование
         output = self.encoder(positional_encoding, self._mask)
 
-        # head
+        # выходной слой
         pred = self.head(self.dropout(output.transpose(0, 1)))
 
-        # add embedding and positional encoding to output
+        # добавить встраивание и позиционное кодирование к выходу
         pred['embedding'] = x_d
         pred['positional_encoding'] = positional_encoding
 

@@ -9,54 +9,56 @@ from neuralprognoz.utils.config import Config
 
 
 class MCLSTM(BaseModel):
-    """Mass-Conserving LSTM model from Hoedt et al. [1]_.
+    """Модель MC-LSTM, сохраняющая массу, из работы Hoedt et al. [1]_.
 
-    This model implements the exact MC-LSTM configuratin that was used by Hoedt et al. [1]_ in the hydrology experiment
-    (for a more general and configurable MC-LSTM model class, check the official MC-LSTM
-    `GitHub repository <https://github.com/ml-jku/mc-lstm>`_).
+    Эта модель реализует точную конфигурацию MC-LSTM, которая использовалась Hoedt et al. [1]_ в гидрологическом эксперименте
+    (для получения более общего и настраиваемого класса модели MC-LSTM см. официальный
+    `репозиторий MC-LSTM на GitHub <https://github.com/ml-jku/mc-lstm>`_).
 
-    The MC-LSTM is an LSTM-inspired timeseries model that guarantees to conserve the mass of a specified `mass_input` by
-    the special design of its architecture. The model consists of three parts:
+    MC-LSTM — это модель временных рядов, вдохновленная LSTM, которая гарантирует сохранение массы указанного `mass_input`
+    благодаря особой конструкции своей архитектуры. Модель состоит из трех частей:
 
-    - an input/junction gate that distributes the mass input at a specific timestep across the memory cells
-    - a redistribution matrix that allows for internal reorganization of the stored mass
-    - an output gate that determines the fraction of the stored mass that is subtracted from the memory cells and
-      defines the output of the MC-LSTM
+    - входной/junction gate, который распределяет массовый вход на определенном временном шаге по ячейкам памяти
+    - матрица перераспределения, которая позволяет внутреннюю реорганизацию хранимой массы
+    - выходной gate, который определяет долю хранимой массы, вычитаемую из ячеек памяти и определяет выход MC-LSTM
 
-    Starting from the general MC-LSTM architecture as presented by Hoedt et al. [1]_ the most notably adaption for the
-    hydrology application is the use of a so-called "*trash cell*". The trash cell is one particular cell of the cell
-    state vector that is not used for deriving the model prediction, which is defined as the sum of the outgoing mass of
-    all memory cells except the trash cell. For more details and different variants that were tested for the application
-    to hydrology, see Appendix B.4.2 in Hoedt et al [1]_.
+    Начиная с общей архитектуры MC-LSTM, представленной Hoedt et al. [1]_, наиболее заметной адаптацией для
+    гидрологического применения является использование так называемой "*мусорной ячейки*". Мусорная ячейка — это
+    одна конкретная ячейка вектора состояния ячейки, которая не используется для вывода прогноза модели,
+    который определяется как сумма исходящей массы всех ячеек памяти, кроме мусорной ячейки. Для получения
+    дополнительных сведений и различных вариантов, которые были протестированы для применения в гидрологии,
+    см. Приложение B.4.2 в Hoedt et al [1]_.
 
-    The config argument `head` is ignored for this model and the model prediction is always computed as the sum over
-    the outgoing mass (excluding the trash cell output).
+    Аргумент конфигурации `head` игнорируется для этой модели, и прогноз модели всегда вычисляется как сумма
+    исходящей массы (исключая выход мусорной ячейки).
 
-    The config argument `initial_forget_bias` is here used to close (negative values) or to open (positive values) the
-    output gate at the beginning of the training. Having the output gate closed means that the MC-LSTM has to actively
-    learn when to remove mass from the system, which can be seen as an analogy to an open forget gate in the standard
+    Аргумент конфигурации `initial_forget_bias` используется здесь для закрытия (отрицательные значения) или
+    открытия (положительные значения) выходного gate в начале обучения. Закрытый выходной gate означает, что
+    MC-LSTM должен активно учиться, когда удалять массу из системы, что можно рассматривать как аналог открытого
+    forget gate в стандартном LSTM.
     LSTM.
 
-    To use this model class, you have to specify the name of the mass input using the `mass_input` config argument.
-    Additionally, the mass input and target variable should *not* be normalized. Use the config argument
-    `custom_normalization` and set the `centering` and `scaling` key for both to `None` (see
-    :doc:`config arguments </usage/config>` for more details on `custom_normalization`).
+    Чтобы использовать этот класс модели, вы должны указать имя массового входа с помощью аргумента конфигурации
+    `mass_input`. Кроме того, массовый вход и целевая переменная *не* должны быть нормализованы. Используйте
+    аргумент конфигурации `custom_normalization` и установите ключи `centering` и `scaling` для обоих в `None`
+    (см. :doc:`аргументы конфигурации </usage/config>` для получения более подробной информации о
+    `custom_normalization`).
 
-    Currently, only a single mass input per time step is supported, as well as a single target.
+    В настоящее время поддерживается только один массовый вход на временной шаг, а также одна цель.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    Raises
+    Вызывает
     ------
     ValueError
-        If no or more than one `mass_input` is specified in the config. Additionally, an error is raised if the hidden
-        size is smaller than 2, the number of `target_variables` is greater than 1, or `dynamics_embedding` is specified
-        in the config, which is (currently) not supported for this model class.
+        Если в конфигурации не указан или указан более одного `mass_input`. Кроме того, ошибка возникает, если скрытый
+        size меньше 2, количество `target_variables` больше 1, или `dynamics_embedding` указан
+        в конфигурации, что (в настоящее время) не поддерживается для этого класса модели.
 
-    References
+    Ссылки
     ----------
     .. [1] Hoedt, P. J., Kratzert, F., Klotz, D., Halmich, C., Holzleitner, M., Nearing, G., Hochreiter, S., and
         Klambauer, G: MC-LSTM: Mass-Conserving LSTM, arXiv Preprint, https://arxiv.org/abs/2101.05186, 2021.
@@ -68,18 +70,18 @@ class MCLSTM(BaseModel):
 
         self._n_mass_vars = len(cfg.mass_inputs)
         if self._n_mass_vars > 1:
-            raise ValueError("Currently, MC-LSTM only supports a single mass input")
+            raise ValueError("В настотящее время, MC-LSTM поддерживает только один массовый вход")
         elif self._n_mass_vars == 0:
-            raise ValueError("No mass input specified. Specify mass input variable using `mass_inputs`")
+            raise ValueError("В конфигурации не указан массовый вход. Укажите массовый вход с помощью аргумента конфигурации `mass_inputs`")
 
         if cfg.dynamics_embedding is not None:
-            raise ValueError("Embedding for dynamic inputs is not supported with the current version of MC-LSTM")
+            raise ValueError("В настоящее время, MC-LSTM не поддерживает встраивание для динамических входов")
 
         if cfg.hidden_size <= 1:
-            raise ValueError("At least hidden size 2 is required for one (mandatory) trash cell and a mass cell.")
+            raise ValueError("Для одной (обязательной) мусорной ячейки и одной массовой ячейки требуется скрытый размер не менее 2.")
 
         if len(cfg.target_variables) > 1:
-            raise ValueError("Currently, MC-LSTM only supports single target settings.")
+            raise ValueError("В настоящее время, MC-LSTM поддерживает только одну цель.")
 
         self.embedding_net = InputLayer(cfg)
 
@@ -90,41 +92,41 @@ class MCLSTM(BaseModel):
                                   cfg=cfg)
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the MC-LSTM model.
+        """Выполняет прямой проход через модель MC-LSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - `y_hat`: model predictions of shape [batch size, sequence length, 1].
-                - `m_out`: mass output of the MC-LSTM (including trash cell as index 0) of shape [batch size, sequence
+            Выходные данные модели и промежуточные состояния в виде словаря.
+                - `y_hat`: прогнозы модели формы [batch size, sequence length, 1].
+                - `m_out`: массовый выход MC-LSTM (включая мусорную ячейку с индексом 0) формы [batch size, sequence
                   length, hidden size].
-                - `c`: cell state of the MC-LSTM of shape [batch size, sequence length, hidden size].
+                - `c`: состояние ячейки MC-LSTM формы [batch size, sequence length, hidden size].
 
         """
-        # possibly pass static inputs through embedding layers and concatenate with dynamics.
-        # This does not include the mass input.
+        # возможно, пропустить статические входы через слои встраивания и объединить с динамическими.
+        # Это не включает массовый вход.
         x_a = self.embedding_net(data, concatenate_output=True)
 
-        # transpose to [seq_length, batch_size, n_features].
+        # транспонировать в [seq_length, batch_size, n_features].
         x_m = torch.cat([data['x_d'][k] for k in self.cfg.mass_inputs], dim=-1).transpose(0, 1)
 
-        # perform forward pass through the MC-LSTM cell
+        # выполнить прямой проход через ячейку MC-LSTM
         m_out, c = self.mclstm(x_m, x_a)
 
-        # exclude trash cell from model predictions (see linked publication for details.)
+        # исключить мусорную ячейку из прогнозов модели (см. связанную публикацию для получения подробной информации.)
         output = m_out[:, :, 1:].sum(dim=-1, keepdim=True)
 
         return {'y_hat': output.transpose(0, 1), 'm_out': m_out.transpose(0, 1), 'c': c.transpose(0, 1)}
 
 
 class _MCLSTMCell(nn.Module):
-    """The logic of the MC-LSTM cell"""
+    """Логика ячейки MC-LSTM"""
 
     def __init__(self, mass_input_size: int, aux_input_size: int, hidden_size: int, cfg: Config):
 
@@ -134,7 +136,7 @@ class _MCLSTMCell(nn.Module):
 
         gate_inputs = aux_input_size + hidden_size + mass_input_size
 
-        # initialize gates
+        # инициализация гейтов
         self.output_gate = _Gate(in_features=gate_inputs, out_features=hidden_size)
         self.input_gate = _NormalizedGate(in_features=gate_inputs,
                                           out_shape=(mass_input_size, hidden_size),
@@ -150,20 +152,19 @@ class _MCLSTMCell(nn.Module):
             nn.init.constant_(self.output_gate.fc.bias, val=self.cfg.initial_forget_bias)
 
     def forward(self, x_m: torch.Tensor, x_a: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Perform forward pass on the MC-LSTM cell.
+        """Выполняет прямой проход через ячейку MC-LSTM.
 
-        Parameters
+        Параметры
         ----------
         x_m : torch.Tensor
-            Mass input that will be conserved by the network.
+            Массовый вход, который будет сохранен сетью.
         x_a : torch.Tensor
-            Auxiliary inputs that will be used to modulate the gates but whose information won't be stored internally
-            in the MC-LSTM cells.
+            Вспомогательные входы, которые будут использоваться для модуляции гейтов, но информация о которых не будет храниться внутри ячеек MC-LSTM.
 
-        Returns
+        Возвращает
         -------
         Tuple[torch.Tensor, torch.Tensor]
-            Outgoing mass and memory cells per time step of shape [sequence length, batch size, hidden size]
+            Массовый и памяти ячейки за каждый временной шаг формы [sequence length, batch size, hidden size]
 
         """
         _, batch_size, _ = x_m.size()
@@ -181,31 +182,31 @@ class _MCLSTMCell(nn.Module):
         return m_out, c
 
     def _step(self, xt_m, xt_a, c):
-        """ Make a single time step in the MCLSTM. """
-        # in this version of the MC-LSTM all available data is used to derive the gate activations. Cell states
-        # are L1-normalized so that growing cell states over the sequence don't cause problems in the gates.
+        """ Сделать один временной шаг MCLSTM. """
+        # во всех доступных данных используется для получения активации гейтов. Состояния ячеек
+        # L1-нормализуются, чтобы растущие состояния ячеек в течение последовательности не вызывали проблем в гейтах.
         features = torch.cat([xt_m, xt_a, c / (c.norm(1) + 1e-5)], dim=-1)
 
-        # compute gate activations
+        # рассчитать gate активации
         i = self.input_gate(features)
         r = self.redistribution(features)
         o = self.output_gate(features)
 
-        # distribute incoming mass over the cell states
+        # Распределить поступающую массу по состояниям ячеек
         m_in = torch.matmul(xt_m.unsqueeze(-2), i).squeeze(-2)
 
-        # reshuffle the mass in the cell states using the redistribution matrix
+        # перетасовать массу в состояниях ячеек с использованием матрицы перераспределения
         m_sys = torch.matmul(c.unsqueeze(-2), r).squeeze(-2)
 
-        # compute the new mass states
+        # вычислить новые массовые состояния
         m_new = m_in + m_sys
 
-        # return the outgoing mass and subtract this value from the cell states.
+        # вернуть исходящую массу и вычесть это значение из состояний ячеек.
         return o * m_new, (1 - o) * m_new
 
 
 class _Gate(nn.Module):
-    """Utility class to implement a standard sigmoid gate"""
+    """Вспомогательный класс для реализации стандартного сигмоидного гейта"""
 
     def __init__(self, in_features: int, out_features: int):
         super(_Gate, self).__init__()
@@ -217,12 +218,12 @@ class _Gate(nn.Module):
         nn.init.zeros_(self.fc.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform forward pass through the normalised gate"""
+        """Выполняет прямой проход через нормализованный гейт"""
         return torch.sigmoid(self.fc(x))
 
 
 class _NormalizedGate(nn.Module):
-    """Utility class to implement a gate with normalised activation function"""
+    """Вспомогательный класс для реализации гейта с нормализованной функцией активации"""
 
     def __init__(self, in_features: int, out_shape: Tuple[int, int], normalizer: str):
         super(_NormalizedGate, self).__init__()
@@ -235,7 +236,7 @@ class _NormalizedGate(nn.Module):
             self.activation = nn.ReLU()
         else:
             raise ValueError(
-                f"Unknown normalizer {normalizer}. Must be one of {'normalized_sigmoid', 'normalized_relu'}")
+                f"Неизвестный нормализатор {normalizer}. Должен быть одним из {'normalized_sigmoid', 'normalized_relu'}")
         self._reset_parameters()
 
     def _reset_parameters(self):
@@ -243,6 +244,6 @@ class _NormalizedGate(nn.Module):
         nn.init.zeros_(self.fc.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform forward pass through the normalized gate"""
+        """Выполняет прямой проход через нормализованный гейт"""
         h = self.fc(x).view(-1, *self.out_shape)
         return torch.nn.functional.normalize(self.activation(h), p=1, dim=-1)

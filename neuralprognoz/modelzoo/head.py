@@ -10,21 +10,21 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_head(cfg: Config, n_in: int, n_out: int) -> nn.Module:
-    """Get specific head module, depending on the run configuration.
+    """Получить конкретный модуль head, в зависимости от конфигурации запуска.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     n_in : int
-        Number of input features.
+        Количество входных признаков.
     n_out : int
-        Number of output features.
+        Количество выходных признаков.
 
-    Returns
+    Возвращает
     -------
     nn.Module
-        The model head, as specified in the run configuration.
+        Модуль head, как указано в конфигурации запуска.
     """
     if cfg.head.lower() == "regression":
         head = Regression(n_in=n_in, n_out=n_out, activation=cfg.output_activation)
@@ -35,32 +35,32 @@ def get_head(cfg: Config, n_in: int, n_out: int) -> nn.Module:
     elif cfg.head.lower() == "cmal":
         head = CMAL(n_in=n_in, n_out=n_out)
     elif cfg.head.lower() == "":
-        raise ValueError(f"No 'head' specified in the config but is required for {cfg.model}")
+        raise ValueError(f"В конфигурации не указан 'head', но он требуется для {cfg.model}")
     else:
-        raise NotImplementedError(f"{cfg.head} not implemented or not linked in `get_head()`")
+        raise NotImplementedError(f"{cfg.head} не реализован или не связан в `get_head()`")
 
     return head
 
 
 class Regression(nn.Module):
-    """Single-layer regression head with different output activations.
+    """Однослойный regression head с различными выходными активациями.
     
-    Parameters
+    Параметры
     ----------
     n_in : int
-        Number of input neurons.
+        Количество входных нейронов.
     n_out : int
-        Number of output neurons.
+        Количество выходных нейронов.
     activation : str, optional
-        Output activation function. Can be specified in the config using the `output_activation` argument. Supported
-        are {'linear', 'relu', 'softplus'}. If not specified (or an unsupported activation function is specified), will
-        default to 'linear' activation.
+        Функция активации выхода. Может быть указана в конфигурации с помощью аргумента `output_activation`. Поддерживаются
+        {'linear', 'relu', 'softplus'}. Если не указана (или указана неподдерживаемая функция активации), будет
+        использована 'linear' активация по умолчанию.
     """
 
     def __init__(self, n_in: int, n_out: int, activation: str = "linear"):
         super(Regression, self).__init__()
 
-        # TODO: Add multi-layer support
+        # TODO: Добавить поддержку многослойности
         layers = [nn.Linear(n_in, n_out)]
         if activation != "linear":
             if activation.lower() == "relu":
@@ -68,17 +68,17 @@ class Regression(nn.Module):
             elif activation.lower() == "softplus":
                 layers.append(nn.Softplus())
             else:
-                LOGGER.warning(f"## WARNING: Ignored output activation {activation} and used 'linear' instead.")
+                LOGGER.warning(f"Игнорируется выходная активация {activation} и используется 'linear' вместо нее.")
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the Regression head.
+        """Выполнить прямой проход Regression head.
         
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
             Dictionary containing the model predictions in the 'y_hat' key.
@@ -87,22 +87,22 @@ class Regression(nn.Module):
 
 
 class GMM(nn.Module):
-    """Gaussian Mixture Density Network
+    """Сеть Гауссовой Смеси
 
-    A mixture density network with Gaussian distribution as components. Good references are [#]_ and [#]_. The latter 
-    one forms the basis for our implementation. As such, we also use two layers in the head to provide it with 
-    additional flexibility, and exponential activation for the variance estimates and a softmax for weights.  
+    Сеть плотности смеси с гауссовыми распределениями в качестве компонентов. Хорошие ссылки - [#]_ и [#]_. Последняя 
+    лежит в основе нашей реализации. Как таковая, мы также используем два слоя в head, чтобы предоставить ей 
+    дополнительную гибкость, экспоненциальную активацию для оценок дисперсии и softmax для весов.  
 
-    Parameters
+    Параметры
     ----------
     n_in : int
-        Number of input neurons.
+        Количество входных нейронов.
     n_out : int
-        Number of output neurons. Corresponds to 3 times the number of components.
+        Количество выходных нейронов. Соответствует 3-кратному количеству компонентов.
     n_hidden : int
-        Size of the hidden layer.
+        Размер скрытого слоя.
     
-    References
+    Ссылки
     ----------
     .. [#] C. M. Bishop: Mixture density networks. 1994.
     .. [#] D. Ha: Mixture density networks with tensorflow. blog.otoro.net, 
@@ -116,47 +116,47 @@ class GMM(nn.Module):
         self._eps = 1e-5
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Perform a GMM head forward pass.
+        """Выполнить прямой проход GMM head.
 
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
-            Output of the previous model part. It provides the basic latent variables to compute the GMM components.
+            Выход предыдущей части модели. Он предоставляет основные скрытые переменные для вычисления компонентов GMM.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Dictionary containing mixture parameters and weights; where the key 'mu' stores the means, the key
-            'sigma' the variances, and the key 'pi' the weights.
+            Словарь, содержащий параметры смеси и веса; где ключ 'mu' хранит средние значения, ключ
+            'sigma' - дисперсии, а ключ 'pi' - веса.
         """
         h = torch.relu(self.fc1(x))
         h = self.fc2(h)
 
-        # split output into mu, sigma and weights
+        # разделение выхода на средние значения, дисперсии и веса
         mu, sigma, pi = h.chunk(3, dim=-1)
 
         return {'mu': mu, 'sigma': torch.exp(sigma) + self._eps, 'pi': torch.softmax(pi, dim=-1)}
 
 
 class CMAL(nn.Module):
-    """Countable Mixture of Asymmetric Laplacians.
+    """Счетная смесь асимметричных распределений Лапласа
 
-    An mixture density network with Laplace distributions as components.
+    Смесь плотности с лапласовскими распределениями в качестве компонентов.
 
-    The CMAL-head uses an additional hidden layer to give it more expressiveness (same as the GMM-head).
-    CMAL is better suited for many hydrological settings as it handles asymmetries with more ease. However, it is also
-    more brittle than GMM and can more often throw exceptions. Details for CMAL can be found in [#]_.
+    CMAL-head использует дополнительный скрытый слой, чтобы придать ему большую выразительность (как и GMM-head).
+    CMAL лучше подходит для многих гидрологических условий, так как он легче справляется с асимметриями. Однако он также
+    более хрупок, чем GMM, и может чаще вызывать исключения. Подробности о CMAL можно найти в [#]_.
 
-    Parameters
+    Параметры
     ----------
     n_in : int
-        Number of input neurons.
+        Количество входных нейронов.
     n_out : int
-        Number of output neurons. Corresponds to 4 times the number of components.
+        Количество выходных нейронов. Соответствует 4-кратному количеству компонентов.
     n_hidden : int
-        Size of the hidden layer.
+        Размер скрытого слоя.
         
-    References
+    Ссылки
     ----------
     .. [#] D.Klotz, F. Kratzert, M. Gauch, A. K. Sampson, G. Klambauer, S. Hochreiter, and G. Nearing: 
         Uncertainty Estimation with Deep Learning for Rainfall-Runoff Modelling. arXiv preprint arXiv:2012.14295, 2020.
@@ -171,27 +171,27 @@ class CMAL(nn.Module):
         self._eps = 1e-5
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Perform a CMAL head forward pass.
+        """Выполнить прямой проход CMAL head.
 
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
-            Output of the previous model part. It provides the basic latent variables to compute the CMAL components.
+            Выход предыдущей части модели. Он предоставляет основные скрытые переменные для вычисления компонентов CMAL.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Dictionary, containing the mixture component parameters and weights; where the key 'mu'stores the means,
-            the key 'b' the scale parameters, the key 'tau' the skewness parameters, and the key 'pi' the weights).
+            Словарь, содержащий параметры смеси и веса; где ключ 'mu' хранит средние значения,
+            ключ 'b' - параметры масштаба, ключ 'tau' - параметры асимметрии, и ключ 'pi' - веса.
         """
         h = torch.relu(self.fc1(x))
         h = self.fc2(h)
 
         m_latent, b_latent, t_latent, p_latent = h.chunk(4, dim=-1)
 
-        # enforce properties on component parameters and weights:
-        m = m_latent  # no restrictions (depending on setting m>0 might be useful)
-        b = self._softplus(b_latent) + self._eps  # scale > 0 (softplus was working good in tests)
+        # навязывание свойств параметрам и весам компонентов:
+        m = m_latent  # без ограничений (в зависимости от настроек m>0 может быть полезно)
+        b = self._softplus(b_latent) + self._eps  # масштаб > 0 (softplus хорошо работал в тестах)
         t = (1 - self._eps) * torch.sigmoid(t_latent) + self._eps  # 0 > tau > 1
         p = (1 - self._eps) * torch.softmax(p_latent, dim=-1) + self._eps  # sum(pi) = 1 & pi > 0
 
@@ -199,26 +199,26 @@ class CMAL(nn.Module):
 
 
 class UMAL(nn.Module):
-    """Uncountable Mixture of Asymmetric Laplacians.
+    """Несчетная смесь асимметричных распределений Лапласа.
 
-    An implicit approximation to the mixture density network with Laplace distributions which does not require to
-    pre-specify the number of components. An additional hidden layer is used to provide the head more expressiveness.
-    General details about UMAL can be found in [#]_. A major difference between their implementation 
-    and ours is the binding-function for the scale-parameter (b). The scale needs to be lower-bound. The original UMAL 
-    implementation uses an elu-based binding. In our experiment however, this produced under-confident predictions
-    (too large variances). We therefore opted for a tailor-made binding-function that limits the scale from below and 
-    above using a sigmoid. It is very likely that this needs to be adapted for non-normalized outputs.   
+    Неявное приближение к сети плотности смеси с распределениями Лапласа, которое не требует предварительного
+    указания количества компонентов. Дополнительный скрытый слой используется для придания голове большей выразительности.
+    Общие сведения об UMAL можно найти в [#]_. Основное отличие между их реализацией 
+    и нашей заключается в функции привязки для параметра масштаба (b). Масштаб должен быть ограничен снизу. Оригинальная реализация UMAL 
+    использует привязку на основе elu. Однако в нашем эксперименте это привело к недостоверным прогнозам
+    (слишком большие дисперсии). Поэтому мы выбрали специальную функцию привязки, которая ограничивает масштаб снизу и 
+    сверху с помощью сигмоиды. Весьма вероятно, что это необходимо адаптировать для ненормализованных выходов.   
 
-    Parameters
+    Параметры
     ----------
     n_in : int
-        Number of input neurons.
+        Количество входных нейронов.
     n_out : int
-        Number of output neurons. Corresponds to 2 times the output-size, since the scale parameters are also predicted.
+        Количество выходных нейронов. Соответствует 2-кратному размеру выхода, так как предсказываются и параметры масштаба.
     n_hidden : int
-        Size of the hidden layer.
+        Размер скрытого слоя.
 
-    References
+    Ссылки
     ----------
     .. [#] A. Brando, J. A. Rodriguez, J. Vitria, and A. R. Munoz: Modelling heterogeneous distributions 
         with an Uncountable Mixture of Asymmetric Laplacians. Advances in Neural Information Processing Systems, 
@@ -229,18 +229,18 @@ class UMAL(nn.Module):
         super(UMAL, self).__init__()
         self.fc1 = nn.Linear(n_in, n_hidden)
         self.fc2 = nn.Linear(n_hidden, n_out)
-        self._upper_bound_scale = 0.5  # this parameter found empirical by testing UMAL for a limited set of basins
+        self._upper_bound_scale = 0.5  # этот параметр был найден эмпирически при тестировании UMAL на ограниченном наборе бассейнов
         self._eps = 1e-5
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Perform a UMAL head forward pass.
+        """Выполнить прямой проход UMAL head.
 
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
-            Output of the previous model part. It provides the basic latent variables to compute the UMAL components.
+            Выход предыдущей части модели. Он предоставляет основные скрытые переменные для вычисления компонентов UMAL.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
             Dictionary containing the means ('mu') and scale parameters ('b') to parametrize the asymmetric Laplacians.
@@ -250,7 +250,7 @@ class UMAL(nn.Module):
 
         m_latent, b_latent = h.chunk(2, dim=-1)
 
-        # enforce properties on component parameters and weights:
-        m = m_latent  # no restrictions (depending on setting m>0 might be useful)
-        b = self._upper_bound_scale * torch.sigmoid(b_latent) + self._eps  # bind scale from two sides.
+        # навязывание свойств параметрам и весам компонентов:
+        m = m_latent  # без ограничений (в зависимости от настроек m>0 может быть полезно)
+        b = self._upper_bound_scale * torch.sigmoid(b_latent) + self._eps  # ограничение масштаба с двух сторон.
         return {'mu': m, 'b': b}

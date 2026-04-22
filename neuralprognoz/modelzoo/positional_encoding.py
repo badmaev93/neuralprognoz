@@ -5,19 +5,19 @@ import torch
 from torch import nn
 
 class PositionalEncoding(nn.Module):
-    """Class to create a positional encoding vector for timeseries inputs to a model without an explicit time dimension.
+    """Класс для создания вектора позиционного кодирования для входных данных временных рядов в модель без явного временного измерения.
 
-    This class implements a sin/cos type embedding vector with a specified maximum length. Adapted from the PyTorch
-    example here: https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    Этот класс реализует вектор встраивания типа sin/cos с указанной максимальной длиной. Адаптировано из примера PyTorch:
+    https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 
-    Parameters
+    Параметры
     ----------
     embedding_dim : int
-        Dimension of the model input, which is typically output of an embedding layer.
+        Размерность входных данных модели, которая обычно является выходом слоя встраивания.
     dropout : float
-        Dropout rate [0, 1) applied to the embedding vector.
+        Коэффициент отсева [0, 1), применяемый к вектору встраивания.
     max_len : int, optional
-        Maximum length of positional encoding. This must be larger than the largest sequence length in the sample.
+        Максимальная длина позиционного кодирования. Это должно быть больше наибольшей длины последовательности в выборке.
     """
 
     def __init__(self, embedding_dim, position_type, dropout, max_len=5000):
@@ -37,25 +37,25 @@ class PositionalEncoding(nn.Module):
         elif position_type.lower() == 'sum':
             self._concatenate = False
         else:
-            raise RuntimeError(f"Unrecognized positional encoding type: {position_type}")
+            raise RuntimeError(f"Нераспознанный тип позиционного кодирования: {position_type}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for positional encoding. Either concatenates or adds positional encoding to encoder input data.
+        """Прямой проход для позиционного кодирования. Объединяет или добавляет позиционное кодирование к входным данным кодировщика.
 
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
-            Dimension is ``[sequence length, batch size, embedding output dimension]``.
-            Data that is to be the input to a transformer encoder after including positional encoding.
-            Typically this will be output from an embedding layer.
+            Размерность ``[sequence length, batch size, embedding output dimension]``.
+            Данные, которые будут поданы на вход кодировщика после включения позиционного кодирования.
+            Обычно это будет выход из слоя встраивания.
 
-        Returns
+        Возвращает
         -------
         torch.Tensor
-            Dimension is ``[sequence length, batch size, encoder input dimension]``.
-            The encoder input dimension is either equal to the embedding output dimension (if ``position_type == sum``)
-            or twice the embedding output dimension (if ``position_type == concatenate``).
-            Encoder input augmented with positional encoding.
+            Размерность ``[sequence length, batch size, encoder input dimension]``.
+            Размерность входных данных кодировщика либо равна размерности выходных данных встраивания (если ``position_type == sum``),
+            либо в два раза больше размерности выходных данных встраивания (если ``position_type == concatenate``).
+            Входные данные кодировщика дополнены позиционным кодированием.
 
         """
         if self._concatenate:

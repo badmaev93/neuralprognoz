@@ -10,18 +10,18 @@ from neuralprognoz.utils.config import Config
 
 
 class GRU(BaseModel):
-    """Gated Recurrent Unit (GRU) class based on the PyTorch GRU implementation.
+    """Класс Gated Recurrent Unit (GRU), основанный на реализации GRU в PyTorch.
 
-    This class implements the standard GRU combined with a model head, as specified in the config. All features
-    (time series and static) are concatenated and passed to the GRU directly.
-    The `GRU` class only supports single-timescale predictions.
+    Этот класс реализует стандартный GRU в сочетании с моделью, как указано в конфигурации. Все признаки
+    (временные ряды и статические) объединяются и передаются в GRU напрямую.
+    Класс `GRU` поддерживает только прогнозы в одном временном масштабе.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # указать субмодули модели, которые позже можно будет использовать для дообучения (finetuning). Имена должны совпадать с атрибутами класса
     module_parts = ['embedding_net', 'gru', 'head']
 
     def __init__(self, cfg: Config):
@@ -37,32 +37,33 @@ class GRU(BaseModel):
         self.head = get_head(cfg=cfg, n_in=cfg.hidden_size, n_out=self.output_size)
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the GRU model.
+        """Выполнить прямой проход модели GRU.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pair.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and states as a dictionary.
-                - `y_hat`: model predictions of shape [batch size, sequence length, number of target variables].
-                - `h_n`: hidden state at the last time step of the sequence of shape [batch size, 1, hidden size].
+            Словарь с выходами модели и промежуточными состояниями. 
+                - `y_hat`: прогнозы модели размерностью [batch size, sequence length, number of target variables].
+                - `h_n`: скрытое состояние на последнем временном шаге последовательности размерностью 
+                    [batch size, 1, hidden size].
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, пропустить динамические и статические входы через embedding слои, затем объединить их
         x_d = self.embedding_net(data, concatenate_output=True)
 
-        # run the actual GRU
+        # выполнить прямой проход GRU
         gru_output, h_n = self.gru(input=x_d)
 
-        # reshape to [batch_size, 1, n_hiddens]
+        # изменить форму на [batch_size, 1, n_hiddens]
         h_n = h_n.transpose(0, 1)
 
         pred = {'h_n': h_n}
 
-        # add the final output as it's returned by the head to the prediction dict
+        # добавить финальный выход в словарь предсказаний
         # (this will contain the 'y_hat')
         pred.update(self.head(self.dropout(gru_output.transpose(0, 1))))
 

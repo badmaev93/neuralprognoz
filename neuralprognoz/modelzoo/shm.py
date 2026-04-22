@@ -5,18 +5,18 @@ from neuralprognoz.utils.config import Config
 
 
 class SHM(BaseConceptualModel):
-    """Modified version of SHM [#]_ hydrological model with dynamic parameterization.
+    """Модифицированная версия гидрологической модели SHM [#]_ с динамической параметризацией.
     
-    The SHM receives the dynamic parameterization given by a deep learning model. This class has two properties which 
-    define the initial conditions of the internal states of the model (buckets) and the ranges in which the model 
-    parameters are allowed to vary during optimization.
+    The SHM получает динамические параметры, заданные моделью глубокого обучения. Этот класс имеет два свойства, которые 
+    определяют начальные условия внутренних состояний модели (buckets) и диапазоны, в которых модель 
+    параметры разрешено варьировать во время оптимизации.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    References
+    Ссылки
     ----------
     .. [#] Ehret, U., van Pruijssen, R., Bortoli, M., Loritz, R., Azmi, E., and Zehe, E.: Adaptive clustering: reducing
         the computational costs of distributed (hydrological) modelling by exploiting time-variable similarity among 
@@ -29,59 +29,60 @@ class SHM(BaseConceptualModel):
 
     def forward(self, x_conceptual: torch.Tensor,
                 lstm_out: torch.Tensor) -> Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]:
-        """Performs forward pass on the SHM model. 
+        """Выполняет прямой проход на модели SHM. 
         
-        In this forward pass, all elements of the batch are processed in  parallel.
+        В этом прямом проходе все элементы пакета обрабатываются параллельно.
 
-        Parameters
+        Параметры
         ----------
         x_conceptual: torch.Tensor
-            Tensor of size [batch_size, time_steps, n_inputs]. The batch_size is associated with a certain basin and a
-            certain prediction period. The time_steps refer to the number of time steps (e.g. days) that our conceptual
-            model is going to be run for. The n_inputs refer to the dynamic forcings used to run the conceptual model
-            (e.g. Precipitation, Temperature...)
+            Тензор размера [batch_size, time_steps, n_inputs]. Размер batch_size связан с определенным бассейном и определенным
+            периодом прогнозирования. Параметр time_steps обозначает количество временных шагов (например, дней), 
+            в течение которых будет запускаться наша концептуальная модель. 
+            Параметр n_inputs обозначает количество динамических параметров, используемых для запуска концептуальной модели 
+            (например, осадки, температура...)
 
         lstm_out: torch.Tensor
-            Tensor of size [batch_size, time_steps, n_parameters]. The tensor comes from the data-driven model  and will
-            be used to obtained the dynamic parameterization of the conceptual model
+            Тензор размера [batch_size, time_steps, n_parameters]. Тензор поступает из модели глубокого обучения и будет
+            использован для получения динамической параметризации концептуальной модели.
 
-        Returns
+        Возвращает
         -------
         Dict[str, Union[torch.Tensor, Dict[str, torch.Tensor]]]
             - y_hat: torch.Tensor
-                Simulated outflow
+                Суммарный сток
             - parameters: Dict[str, torch.Tensor]
-                Dynamic parameterization of the conceptual model
+                Динамическая параметризация концептуальной модели
             - internal_states: Dict[str, torch.Tensor]]
-                Time-evolution of the internal states of the conceptual model
+                Временная эволюция внутренних состояний концептуальной модели
         """
-        # get model parameters
+        # Получаем параметры модели
         parameters = self._get_dynamic_parameters_conceptual(lstm_out=lstm_out)
 
-        # initialize structures to store the information
+        # Инициализируем структуры для хранения информации
         states, out = self._initialize_information(conceptual_inputs=x_conceptual)
 
-        # initialize constants
+        # Инициализируем константы
         zero = torch.tensor(0.0, dtype=torch.float32, device=x_conceptual.device)
         one = torch.tensor(1.0, dtype=torch.float32, device=x_conceptual.device)
         klu = torch.tensor(0.90, requires_grad=False, dtype=torch.float32,
-                           device=x_conceptual.device)  # land use correction factor [-]
+                           device=x_conceptual.device)  # коэффициент коррекции землепользования [-]
 
-        # auxiliary vectors to accelerate the execution of the hydrological model
+        # Вспомогательные векторы для ускорения выполнения гидрологической модели
         t_mean = (x_conceptual[:, :, 2] + x_conceptual[:, :, 3]) / 2
         temp_mask = t_mean < 0
         snow_melt = t_mean * parameters['dd']
         snow_melt[temp_mask] = zero
-        # liquid precipitation:
+        # Жидкие осадки:
         liquid_p = x_conceptual[:, :, 0].clone()
         liquid_p[temp_mask] = zero
-        # solid precipitation (snow):
+        # Твердые осадки (снег):
         snow = x_conceptual[:, :, 0].clone()
         snow[~temp_mask] = zero
-        # permanent wilting point use in ET:
+        # Точка устойчивого завядания, используемая в ET:
         pwp = torch.tensor(0.8, dtype=torch.float32, device=x_conceptual.device) * parameters['sumax']
 
-        # Storages
+        # Резервуары
         ss = torch.tensor(self.initial_states['ss'], dtype=torch.float32,
                           device=x_conceptual.device).repeat(x_conceptual.shape[0])
         sf = torch.tensor(self.initial_states['sf'], dtype=torch.float32,
@@ -93,55 +94,55 @@ class SHM(BaseConceptualModel):
         sb = torch.tensor(self.initial_states['sb'], dtype=torch.float32,
                           device=x_conceptual.device).repeat(x_conceptual.shape[0])
 
-        # run hydrological model for each time step
+        # Запускаем гидрологическую модель для каждого временного шага
         for j in range(x_conceptual.shape[1]):
-            # Snow module --------------------------
+            # Модуль снега --------------------------
             qs_out = torch.minimum(ss, snow_melt[:, j])
             ss = ss - qs_out + snow[:, j]
             qsp_out = qs_out + liquid_p[:, j]
 
-            # Split snowmelt+rainfall into inflow to fastflow reservoir and unsaturated reservoir ------
+            # Разделяем талый снег + дождь на приток в резервуар быстрого потока и ненасыщенный резервуар ------
             qf_in = torch.maximum(zero, qsp_out - parameters['f_thr'][:, j])
             qu_in = torch.minimum(qsp_out, parameters['f_thr'][:, j])
 
-            # Fastflow module ----------------------
+            # Модуль быстрого потока ----------------------
             sf = sf + qf_in
             qf_out = sf / parameters['kf'][:, j]
             sf = sf - qf_out
 
-            # Unsaturated zone----------------------
+            # Ненасыщенная зона----------------------
             psi = (su / parameters['sumax'][:, j])**parameters['beta'][:, j]  # [-]
             su_temp = su + qu_in * (1 - psi)
             su = torch.minimum(su_temp, parameters['sumax'][:, j])
             qu_out = qu_in * psi + torch.maximum(zero, su_temp - parameters['sumax'][:, j])  # [mm]
-            # Evapotranspiration -------------------
+            # Испарение -------------------
             ktetha = su / parameters['sumax'][:, j]
             et_mask = su <= pwp[:, j]
             ktetha[~et_mask] = one
-            ret = x_conceptual[:, j, 1] * klu * ktetha  # [mm]
-            su = torch.maximum(zero, su - ret)  # [mm]
+            ret = x_conceptual[:, j, 1] * klu * ktetha  # [мм]
+            su = torch.maximum(zero, su - ret)  # [мм]
 
-            # Interflow reservoir ------------------
-            qi_in = qu_out * parameters['perc'][:, j]  # [mm]
-            si = si + qi_in  # [mm]
-            qi_out = si / parameters['ki'][:, j]  # [mm]
-            si = si - qi_out  # [mm]
+            # Резервуар межпластового стока ------------------
+            qi_in = qu_out * parameters['perc'][:, j]  # [мм]
+            si = si + qi_in  # [мм]
+            qi_out = si / parameters['ki'][:, j]  # [мм]
+            si = si - qi_out  # [мм]
 
-            # Baseflow reservoir -------------------
-            qb_in = qu_out * (1.0 - parameters['perc'][:, j])  # [mm]
-            sb = sb + qb_in  # [mm]
-            qb_out = sb / parameters['kb'][:, j]  # [mm]
+            # Резервуар грунтового стока -------------------
+            qb_in = qu_out * (1.0 - parameters['perc'][:, j])  # [мм]
+            sb = sb + qb_in  # [мм]
+            qb_out = sb / parameters['kb'][:, j]  # [мм]
             sb = sb - qb_out
 
-            # Store time evolution of the internal states
+            # Сохраняем временную эволюцию внутренних состояний
             states['ss'][:, j] = ss
             states['sf'][:, j] = sf
             states['su'][:, j] = su
             states['si'][:, j] = si
             states['sb'][:, j] = sb
 
-            # total outflow
-            out[:, j, 0] = qf_out + qi_out + qb_out  # [mm]
+            # Суммарный сток
+            out[:, j, 0] = qf_out + qi_out + qb_out  # [мм]
 
         return {'y_hat': out, 'parameters': parameters, 'internal_states': states}
 

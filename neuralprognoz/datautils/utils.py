@@ -13,8 +13,8 @@ from ruamel.yaml import YAML
 from xarray.core.dataarray import DataArray
 from xarray.core.dataset import Dataset
 
-# Pandas switched from "Y" to "YE" and similar identifiers in 2.2.0. This snippet checks which one is correct for the
-# current pandas installation.
+# В версии 2.2.0 в Pandas произошел переход от "Y" к "YE" и аналогичным идентификаторам. 
+# Этот фрагмент кода проверяет, какой из них является правильным для текущей версии Pandas.
 _YE_FREQ = 'YE'
 _ME_FREQ = 'ME'
 _QE_FREQ = 'QE'
@@ -27,34 +27,34 @@ except ValueError:
 
 
 def load_scaler(run_dir: Path) -> Dict[str, Union[pd.Series, xarray.Dataset]]:
-    """Load feature scaler from run directory.
+    """Загрузка масштабировщика признаков из директории запуска.
 
-    Checks run directory for scaler file in yaml format (new) or pickle format (old).
+    Проверяет директорию запуска на наличие файла масштабировщика в формате yaml (новый) или pickle (старый).
 
-    Parameters
+    Параметры
     ----------
     run_dir: Path
-        Run directory. Has to contain a folder 'train_data' that contains the 'train_data_scaler' file.
+        Директория запуска. Должна содержать папку 'train_data', в которой находится файл 'train_data_scaler'.
 
-    Returns
+    Возвращает
     -------
-    Dictionary, containing the feature scaler for static and dynamic features.
+    Dict[str, Union[pd.Series, xarray.Dataset]]
+        Словарь, содержащий масштабировщик признаков для статических и динамических признаков.
     
-    Raises
+    Вызывает
     ------
     FileNotFoundError
-        If neither a 'train_data_scaler.yml' or 'train_data_scaler.p' file is found in the 'train_data' folder of the 
-        run directory.
+        Если файл масштабировщика не найден в директории запуска.
     """
     scaler_file = run_dir / "train_data" / "train_data_scaler.yml"
 
     if scaler_file.is_file():
-        # read scaler from disk
+        # читаем масштабировщик из файла
         with scaler_file.open("r") as fp:
             yaml = YAML(typ="safe")
             scaler_dump = yaml.load(fp)
 
-        # transform scaler into the format expected by neuralprognoz
+        # преобразуем масштабировщик в формат, ожидаемый neuralprognoz
         scaler = {}
         for key, value in scaler_dump.items():
             if key in ["attribute_means", "attribute_stds", "camels_attr_means", "camels_attr_stds"]:
@@ -101,26 +101,25 @@ def load_scaler(run_dir: Path) -> Dict[str, Union[pd.Series, xarray.Dataset]]:
                 scaler = pickle.load(fp)
             return scaler
         else:
-            raise FileNotFoundError(f"No scaler file found in {scaler_file.parent}. "
-                                    "Looked for (new) yaml file or (old) pickle file")
+            raise FileNotFoundError(f"Файл масштабирования не найден {scaler_file.parent}. "
+                                    "Искали (новый) yaml файл или (старый) pickle файл")
 
 
 def load_hydroatlas_attributes(data_dir: Path, basins: List[str] = []) -> pd.DataFrame:
-    """Load HydroATLAS attributes into a pandas DataFrame
+    """Загрузка атрибутов HydroATLAS в pandas DataFrame
 
-    Parameters
+    Параметры
     ----------
     data_dir : Path
-        Path to the root directory of the dataset. Must contain a folder called 'hydroatlas_attributes' with a file
-        called `attributes.csv`. The attributes file is expected to have one column called `basin_id`.
+        Путь к корневой директории набора данных. Должна содержать папку 'hydroatlas_attributes' с файлом
+        'attributes.csv'. Файл атрибутов должен иметь столбец 'basin_id'.
     basins : List[str], optional
-        If passed, return only attributes for the basins specified in this list. Otherwise, the attributes of all basins
-        are returned.
+        Если передано, возвращает только атрибуты для указанных бассейнов. В противном случае возвращаются атрибуты всех бассейнов.
 
-    Returns
+    Возвращает
     -------
     pd.DataFrame
-        Basin-indexed DataFrame containing the HydroATLAS attributes.
+        DataFrame с атрибутами HydroATLAS, индексированный по бассейнам.
     """
     attribute_file = data_dir / "hydroatlas_attributes" / "attributes.csv"
     if not attribute_file.is_file():
@@ -137,34 +136,34 @@ def load_hydroatlas_attributes(data_dir: Path, basins: List[str] = []) -> pd.Dat
 
 
 def load_basin_file(basin_file: Path) -> List[str]:
-    """Load list of basins from text file.
+    """Загрузка списка бассейнов из текстового файла.
     
-    Note: Basins names are not allowed to end with '_period*'
+    Примечание: Имена бассейнов не должны оканчиваться на '_period*'
     
-    Parameters
+    Параметры
     ----------
     basin_file : Path
-        Path to a basin txt file. File has to contain one basin id per row, while empty rows are ignored.
+        Путь к текстовому файлу с бассейнами. Файл должен содержать один идентификатор бассейна на строку, пустые строки игнорируются.
 
-    Returns
+    Возвращает
     -------
     List[str]
-        List of basin ids as strings.
+        Список идентификаторов бассейнов в виде строк.
         
-    Raises
+    Вызывает
     ------
     ValueError
-        In case of invalid basin names that would cause problems internally.
+        В случае недопустимых имен бассейнов, которые могут вызвать проблемы.
     """
     with basin_file.open('r') as fp:
         basins = sorted(basin.strip() for basin in fp if basin.strip())
 
-    # sanity check basin names
+    # проверка имен бассейнов
     problematic_basins = [basin for basin in basins if basin.split('_')[-1].startswith('period')]
     if problematic_basins:
         msg = [
-            f"The following basin names are invalid {problematic_basins}. Check documentation of the ",
-            "'load_basin_file()' functions for details."
+            f"Следующие имена бассейнов недопустимы: {problematic_basins}. Проверьте документацию ",
+            "функции 'load_basin_file()' для получения подробной информации."
         ]
         raise ValueError(" ".join(msg))
 
@@ -172,23 +171,23 @@ def load_basin_file(basin_file: Path) -> List[str]:
 
 
 def attributes_sanity_check(df: pd.DataFrame):
-    """Utility function to check the suitability of the attributes for model training.
+    """Вспомогательная функция для проверки пригодности атрибутов для обучения модели.
     
-    This utility function can be used to check if any attribute has a standard deviation of zero. This would lead to 
-    NaN's when normalizing the features and thus would lead to NaN's when training the model. It also checks if any
-    attribute for any basin contains a NaN, which would also cause NaNs during model training.
+    Эта вспомогательная функция может использоваться для проверки того, имеет ли какой-либо атрибут стандартное отклонение, равное нулю. Это приведет к 
+    NaN's при нормализации признаков и, следовательно, к NaN's при обучении модели. Она также проверяет, содержит ли какой-либо 
+    атрибут для какого-либо бассейна NaN, что также вызовет NaN's во время обучения модели.
     
-    Parameters
+    Параметры
     ----------
     df : pd.DataFrame
-        DataFrame of catchment attributes as columns.
+        DataFrame с атрибутами бассейнов в качестве столбцов.
 
-    Raises
+    Вызывает
     ------
     RuntimeError
-        If one or more attributes have a standard deviation of zero or any attribute for any basin is NaN.
+        Если один или несколько атрибутов имеют стандартное отклонение, равное нулю, или какой-либо атрибут для какого-либо бассейна является NaN.
     """
-    # Check for NaNs in standard deviation of attributes.
+    # Проверка на NaN в стандартном отклонении атрибутов.
     attributes = []
     if any(df.std() == 0.0) or any(df.std().isnull()):
         for k, v in df.std().items():
@@ -196,13 +195,13 @@ def attributes_sanity_check(df: pd.DataFrame):
                 attributes.append(k)
     if attributes:
         msg = [
-            "The following attributes have a std of zero or NaN, which results in NaN's ",
-            "when normalizing the features. Remove the attributes from the attribute feature list ",
-            "and restart the run. \n", f"Attributes: {attributes}"
+            "Следующие атрибуты имеют стандартное отклонение, равное нулю или NaN, что приводит к NaN's ",
+            "при нормализации признаков. Удалите атрибуты из списка признаков атрибутов ",
+            "и перезапустите запуск. \n", f"Атрибуты: {attributes}"
         ]
         raise RuntimeError("".join(msg))
 
-    # Check for NaNs in any attribute of any basin
+    # Проверка на NaN в любом атрибуте любого бассейна
     nan_df = df[df.isnull().any(axis=1)]
     if len(nan_df) > 0:
         failure_cases = defaultdict(list)
@@ -210,126 +209,126 @@ def attributes_sanity_check(df: pd.DataFrame):
             for feature, value in row.items():
                 if np.isnan(value):
                     failure_cases[basin].append(feature)
-        # create verbose error message
-        msg = ["The following basins/attributes are NaN, which can't be used as input:"]
+        # Создание подробного сообщения об ошибке
+        msg = ["Следующие бассейны/атрибуты содержат NaN, которые не могут быть использованы в качестве входных данных:"]
         for basin, features in failure_cases.items():
             msg.append(f"{basin}: {features}")
         raise RuntimeError("\n".join(msg))
 
 
 def sort_frequencies(frequencies: List[str]) -> List[str]:
-    """Sort the passed frequencies from low to high frequencies.
+    """Сортировка переданных частот от низких к высоким.
 
-    Use `pandas frequency strings
+    Используйте `pandas frequency strings
     <https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#timeseries-offset-aliases>`_
-    to define frequencies. Note: The strings need to include values, e.g., '1D' instead of 'D'.
+    для определения частот. Примечание: Строки должны включать значения, например, '1D' вместо 'D'.
 
-    Parameters
+    Параметры
     ----------
     frequencies : List[str]
-        List of pandas frequency identifiers to be sorted.
+        Список идентификаторов частот pandas для сортировки.
 
-    Returns
+    Возвращает
     -------
     List[str]
-        Sorted list of pandas frequency identifiers.
+        Отсортированный список идентификаторов частот pandas.
 
-    Raises
+    Вызывает
     ------
     ValueError
-        If a pair of frequencies in `frequencies` is not comparable via `compare_frequencies`.
+        Если пара частот в `frequencies` не может быть сравнена через `compare_frequencies`.
     """
     return sorted(frequencies, key=functools.cmp_to_key(compare_frequencies))
 
 
 def infer_frequency(index: Union[pd.DatetimeIndex, np.ndarray]) -> str:
-    """Infer the frequency of an index of a pandas DataFrame/Series or xarray DataArray.
+    """Определение частоты индекса pandas DataFrame/Series или xarray DataArray.
 
-    Parameters
+    Параметры
     ----------
     index : Union[pd.DatetimeIndex, np.ndarray]
-        DatetimeIndex of a DataFrame/Series or array of datetime values.
+        DatetimeIndex DataFrame/Series или массив значений datetime.
 
-    Returns
+    Возвращает
     -------
     str
-        Frequency of the index as a `pandas frequency string
+        Частота индекса в виде `pandas frequency string
         <https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#timeseries-offset-aliases>`_
 
-    Raises
+    Вызывает
     ------
     ValueError
-        If the frequency cannot be inferred from the index or is zero.
+        Если частота не может быть выведена из индекса или равна нулю.
     """
     native_frequency = pd.infer_freq(index)
     if native_frequency is None:
-        raise ValueError(f'Cannot infer a legal frequency from dataset: {native_frequency}.')
-    if native_frequency[0] not in '0123456789':  # add a value to the unit so to_timedelta works
+        raise ValueError(f'Не удается вывести допустимую частоту из набора данных: {native_frequency}.')
+    if native_frequency[0] not in '0123456789':  # добавляем значение к единице, чтобы to_timedelta работала
         native_frequency = f'1{native_frequency}'
 
-    # pd.Timedelta doesn't understand weekly (W) frequencies, so we convert them to the equivalent multiple of 7D.
+    # pd.Timedelta не понимает еженедельные (W) частоты, поэтому мы преобразуем их в эквивалентное кратное 7D.
     weekly_freq = re.match('(\d+)W(-(MON|TUE|WED|THU|FRI|SAT|SUN))?$', native_frequency)
     if weekly_freq is not None:
         n = int(weekly_freq[1]) * 7
         native_frequency = f'{n}D'
 
-    # Assert that the frequency corresponds to a positive time delta. We first add one offset to the base datetime
-    # to make sure it's aligned with the frequency. Otherwise, adding an offset of e.g. 0Y would round up to the
-    # nearest year-end, so we'd incorrectly miss a frequency of zero.
+    # Проверяем, что частота соответствует положительному временному интервалу. Сначала мы добавляем один смещение к базовой дате,
+    # чтобы убедиться, что она выровнена с частотой. В противном случае добавление смещения, например, 0Y, приведет к округлению до
+    # ближайшего конца года, и мы ошибочно пропустим нулевую частоту.
     base_datetime = pd.to_datetime('2001-01-01 00:00:00') + to_offset(native_frequency)
     if base_datetime >= base_datetime + to_offset(native_frequency):
-        raise ValueError('Inferred dataset frequency is zero or negative.')
+        raise ValueError('Выведенная частота набора данных равна нулю или отрицательна.')
     return native_frequency
 
 
 def infer_datetime_coord(xr: Union[DataArray, Dataset]) -> str:
-    """Checks for coordinate with 'date' in its name and returns the name.
+    """Проверяет наличие координаты с 'date' в названии и возвращает имя.
     
-    Parameters
+    Параметры
     ----------
     xr : Union[DataArray, Dataset]
-        Array to infer coordinate name of.
+        Массив для определения имени координаты.
         
-    Returns
+    Возвращает
     -------
     str
-        Name of datetime coordinate name.
+        Имя координаты datetime.
         
-    Raises
+    Вызывает
     ------
     RuntimeError
-        If none or multiple coordinates with 'date' in its name are found.
+        Если не найдено ни одной координаты с 'date' в названии или найдено несколько.
     """
     candidates = [c for c in list(xr.coords) if "date" in c]
     if len(candidates) > 1:
-        raise RuntimeError("Found multiple coordinates with 'date' in its name.")
+        raise RuntimeError("Найдено несколько координат с 'date' в названии.")
     if not candidates:
-        raise RuntimeError("Did not find any coordinate with 'date' in its name")
+        raise RuntimeError("Не найдено ни одной координаты с 'date' в названии")
 
     return candidates[0]
 
 
 def compare_frequencies(freq_one: str, freq_two: str) -> int:
-    """Compare two frequencies.
+    """Сравнение двух частот.
 
-    Note that only frequencies that work with `get_frequency_factor` can be compared.
+    Примечание: Сравнивать можно только частоты, которые работают с `get_frequency_factor`.
 
-    Parameters
+    Параметры
     ----------
     freq_one : str
-        First frequency.
+        Первая частота.
     freq_two : str
-        Second frequency.
+        Вторая частота.
 
-    Returns
+    Возвращает
     -------
     int
-        -1 if `freq_one` is lower than `freq_two`, +1 if it is larger, 0 if they are equal.
+        -1 если `freq_one` ниже `freq_two`, +1 если она выше, 0 если они равны.
 
-    Raises
+    Вызывает
     ------
     ValueError
-        If the two frequencies are not comparable via `get_frequency_factor`.
+        Если две частоты не могут быть сравнены через `get_frequency_factor`.
     """
     freq_factor = get_frequency_factor(freq_one, freq_two)
     if freq_factor < 1:
@@ -340,27 +339,27 @@ def compare_frequencies(freq_one: str, freq_two: str) -> int:
 
 
 def get_frequency_factor(freq_one: str, freq_two: str) -> float:
-    """Get relative factor between the two frequencies.
+    """Определение относительного коэффициента между двумя частотами.
 
-    Parameters
+    Параметры
     ----------
     freq_one : str
-        String representation of the first frequency.
+        Строковое представление первой частоты.
     freq_two : str
-        String representation of the second frequency.
+        Строковое представление второй частоты.
 
-    Returns
+    Возвращает
     -------
     float
-        Ratio of `freq_one` to `freq_two`.
+        Отношение `freq_one` к `freq_two`.
 
-    Raises
+    Вызывает
     ------
     ValueError
-        If the frequency factor cannot be determined. This can be the case if the frequencies do not represent a fixed
-        time delta and are not directly comparable (e.g., because they have the same unit)
-        E.g., a month does not represent a fixed time delta. Thus, 1D and 1M are not comparable. However, 1M and 2M are
-        comparable since they have the same unit.
+        Если коэффициент частоты не может быть определен. Это может произойти, если частоты не представляют фиксированный
+        временной интервал и не могут быть напрямую сравнены (например, потому что они имеют один и тот же юнит)
+        Например, месяц не представляет фиксированный временной интервал. Таким образом, 1D и 1M не сравнимы. Однако, 1M и 2M
+        сравнимы, так как имеют один и тот же юнит.
     """
     if freq_one == freq_two:
         return 1
@@ -368,10 +367,10 @@ def get_frequency_factor(freq_one: str, freq_two: str) -> float:
     offset_one = to_offset(freq_one)
     offset_two = to_offset(freq_two)
     if offset_one.n < 0 or offset_two.n < 0:
-        # Would be possible to implement, but we should never need negative frequencies, so it seems reasonable to
-        # fail gracefully rather than to open ourselves to potential unexpected corner cases.
-        raise NotImplementedError('Cannot compare negative frequencies.')
-    # avoid division by zero errors
+        # Можно было бы реализовать, но нам никогда не понадобятся отрицательные частоты, поэтому кажется разумным
+        # завершить работу с ошибкой, а не открывать себя для потенциальных неожиданных пограничных случаев.
+        raise NotImplementedError('Невозможно сравнить отрицательные частоты.')
+    # избегаем ошибок деления на ноль
     if offset_one.n == offset_two.n == 0:
         return 1
     if offset_two.n == 0:
@@ -379,11 +378,11 @@ def get_frequency_factor(freq_one: str, freq_two: str) -> float:
     if offset_one.name == offset_two.name:
         return offset_one.n / offset_two.n
 
-    # some simple hard-coded cases
+    # некоторые простые жестко закодированные случаи
     factor = None
     regex_month_or_day = '-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|MON|TUE|WED|THU|FRI|SAT|SUN)$'
     for i, (one, two) in enumerate([(offset_one, offset_two), (offset_two, offset_one)]):
-        # the offset anchor is irrelevant for the ratio between the frequencies, so we remove it from the string
+        # якорь смещения не имеет значения для отношения между частотами, поэтому мы удаляем его из строки
         name_one = re.sub(regex_month_or_day, '', one.name)
         name_two = re.sub(regex_month_or_day, '', two.name)
         if (name_one in ['A', _YE_FREQ] and name_two == _ME_FREQ) or (name_one in ['AS', 'YS'] and name_two == 'MS'):
@@ -397,18 +396,18 @@ def get_frequency_factor(freq_one: str, freq_two: str) -> float:
 
         if factor is not None:
             if i == 1:
-                return 1 / factor  # `one` was `offset_two`, `two` was `offset_one`
+                return 1 / factor  # `one` был `offset_two`, `two` был `offset_one`
             return factor
 
-    # If all other checks didn't match, we try to convert the frequencies to timedeltas. However, we first need to avoid
-    # two cases: (1) pd.to_timedelta currently interprets 'M' as minutes, while it means months in to_offset.
-    # (2) Using 'M', 'Y', and 'y' in pd.to_timedelta is deprecated and won't work in the future, so we don't allow it.
+    # Если все остальные проверки не совпали, мы пытаемся преобразовать частоты в timedeltas. Однако, мы сначала должны избежать
+    # двух случаев: (1) pd.to_timedelta в настоящее время интерпретирует 'M' как минуты, в то время как в to_offset он означает месяцы.
+    # (2) Использование 'M', 'Y' и 'y' в pd.to_timedelta устарело и не будет работать в будущем, поэтому мы не разрешаем это.
     if any(
             re.sub(regex_month_or_day, '', offset.name) in ['M', 'Y', 'A', 'y', 'ME', 'YE']
             for offset in [offset_one, offset_two]):
-        raise ValueError(f'Frequencies {freq_one} and/or {freq_two} are not comparable.')
+        raise ValueError(f'Частоты {freq_one} и/or {freq_two} не сравнимы.')
     try:
         factor = pd.to_timedelta(freq_one) / pd.to_timedelta(freq_two)
     except ValueError as err:
-        raise ValueError(f'Frequencies {freq_one} and/or {freq_two} are not comparable.') from err
+        raise ValueError(f'Частоты {freq_one} и/or {freq_two} не сравнимы.') from err
     return factor

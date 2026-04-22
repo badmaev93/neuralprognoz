@@ -24,27 +24,27 @@ def load_basin_id_encoding(run_dir: Path) -> Dict[str, int]:
                 id_to_int = pickle.load(fp)
             return id_to_int
         else:
-            raise FileNotFoundError(f"No id-to-int file found in {id_to_int_file.parent}. "
-                                    "Looked for (new) yaml file or (old) pickle file")
+            raise FileNotFoundError(f"Файл id-to-int не найден в {id_to_int_file.parent}. "
+                                    "Искали (новый) yaml файл или (старый) pickle файл")
 
 
 
 def metrics_to_dataframe(results: dict, metrics: Iterable[str], targets: Iterable[str]) -> pd.DataFrame:
-    """Extract all metric values from result dictionary and convert to pandas.DataFrame
+    """Извлечь все значения метрик из результирующего словаря и преобразовать в pandas.DataFrame
 
-    Parameters
+    Параметры
     ----------
     results : dict
-        Dictionary, containing the results of the model evaluation as returned by the `Tester.evaluate()`.
+        Словарь, содержащий результаты оценки модели, возвращаемые `Tester.evaluate()`.
     metrics : Iterable[str]
-        Iterable of metric names (without frequency suffix).
+        Итерируемый объект с именами метрик (без суффикса частоты).
     targets : Iterable[str]
-        Iterable of target variable names.
+        Итерируемый объект с именами целевых переменных.
 
-    Returns
+    Возвращает
     -------
-    A basin indexed DataFrame with one column per metric. In case of multi-frequency runs, the metric names contain
-    the corresponding frequency as a suffix.
+    Индексированный DataFrame с одним столбцом на каждую метрику. В случае многочастотных запусков названия метрик
+    содержат соответствующий суффикс частоты.
     """
     metrics_dict = defaultdict(dict)
     for basin, basin_data in results.items():
@@ -54,12 +54,12 @@ def metrics_to_dataframe(results: dict, metrics: Iterable[str], targets: Iterabl
                 if len(targets) > 1:
                     metric_key = f"{target}_{metric}"
                 if len(basin_data) > 1:
-                    # For multi-frequency runs, metrics include a frequency suffix.
+                    # для многочастотных запусков метрики включают суффикс частоты
                     metric_key = f"{metric_key}_{freq}"
                 if metric_key in freq_results.keys():
                     metrics_dict[basin][metric_key] = freq_results[metric_key]
                 else:
-                    # in case the current period has no valid samples, the result dict has no metric-key
+                    # в случае, если текущий период не имеет допустимых выборок, результирующий словарь не имеет metric-key
                     metrics_dict[basin][metric_key] = np.nan
 
     df = pd.DataFrame.from_dict(metrics_dict, orient="index")

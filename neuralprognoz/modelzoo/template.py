@@ -7,71 +7,73 @@ from neuralprognoz.utils.config import Config
 
 
 class TemplateModel(BaseModel):
-    """Initialize the model
+    """Инициализация модели
 
-    Each model constructor receives the config instance as its only input. From this, the entire model has to be
-    created (with potential use of other modules, such as FC from fc.py). During training and inference, the forward
-    method of this class will be called with the model inputs and has to return the predictions.
+    Каждый конструктор модели получает экземпляр config в качестве единственного входного параметра. Из него должна быть
+    создана вся модель (с возможным использованием других модулей, таких как FC из fc.py). Во время обучения и
+    инференса метод forward этого класса будет вызван с входными данными модели и должен вернуть предсказания.
 
-    Each Model inherits from the BaseModel, which implements some universal functionality. The basemodel also 
-    defines the output_size, which can be used here as a given attribute (self.output_size).
+    Каждая модель наследуется от BaseModel, которая реализует некоторые универсальные функции. BaseModel также 
+    определяет output_size, который может быть использован здесь как данный атрибут (self.output_size).
 
-    To be generally useable within this codebase, the output layer should not be implemented in this Module,
-    but rather using the get_head() function from neuralprognoz.modelzoo.head.
+    Чтобы быть общепригодным в этой кодовой базе, выходной слой не должен быть реализован в этом модуле,
+    а скорее с использованием функции get_head() из neuralprognoz.modelzoo.head.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        Configuration of the run, read from the config file with some additional keys (such as number of basins).
+        Конфигурация запуска, считанная из файла конфигурации с дополнительными ключами (такими как количество бассейнов).
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # определить субмодули модели, которые могут быть использованы для тонкой настройки. Имена должны совпадать с атрибутами класса
     module_parts = []
 
     def __init__(self, cfg: Config):
 
         super(TemplateModel, self).__init__(cfg=cfg)
 
-        ###########################
-        # Create model parts here #
-        ###########################
+        ##############################
+        # Создать части модели здесь #
+        ##############################
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Forward pass through the model
+        """Прямой проход через модель
 
-                By convention, each forward pass has to accept a dict of input tensors. Usually, this dict contains
-                'x_d' and, possibly, x_s and x_one_hot. If x_d and x_s are available at multiple frequencies,
-                the keys 'x_d' and 'x_s' have frequency suffixes such as 'x_d_1h' for hourly data.
-                Furthermore, by definition, each model has to return a dict containing the network predictions in
-                'y_hat', potentially in addition to other dictionary keys. LSTM-based models should stick to the
-                convention to return (at least) the following three tensors: y_hat, h_n, c_n (or, in the multi-
-                frequency case, y_hat_1h, y_hat_1D, etc.).
+                По соглашению, каждый прямой проход должен принимать словарь входных тензоров. Обычно этот словарь содержит
+                'x_d' и, возможно, x_s и x_one_hot. Если x_d и x_s доступны на нескольких частотах,
+                ключи 'x_d' и 'x_s' имеют суффиксы частоты, такие как 'x_d_1h' для почасовых данных.
+                Кроме того, по определению, каждая модель должна возвращать словарь, содержащий предсказания сети в
+                'y_hat', потенциально в дополнение к другим ключам словаря. Модели на основе LSTM должны придерживаться
+                соглашения возвращать (по крайней мере) следующие три тензора: y_hat, h_n, c_n (или, в случае мульти-
+                частотного случая, y_hat_1h, y_hat_1D, etc.).
 
-                Parameters
+                Параметры
                 ----------
                 data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-                     Dictionary with tensors
-                        - x_d, a dictionary with the dynamic input data. Each key is a feature name, and each
-                            value is a tensor of shape [batch size, sequence length, 1].
-                        - x_s of shape [batch size, features] containing static input features. These are the
-                            concatenation of what is defined in the config under static_attributes and evolving_attributes.
-                            In case not a single camels attribute or static input feature is defined in the config,
-                            x_s will not be present.
-                        - x_one_hot of shape [batch size, number of basins] containing the one hot encoding of the
-                            basins. In case 'use_basin_id_encoding' is set to False in the config, x_one_hot will
-                            not be present.
+                     Словарь с тензорами
+                        - x_d, словарь с динамическими входными данными. Каждый ключ - это имя признака, а каждое
+                            значение - это тензор формы [batch size, sequence length, 1].
+                        - x_s формы [batch size, features], содержащий статические входные признаки. Это
+                            конкатенация того, что определено в config в разделе static_attributes и evolving_attributes.
+                            В случае, если в config не определен ни один атрибут camels или статический входной признак,
+                            x_s не будет присутствовать.
+                        - x_one_hot формы [batch size, number of basins], содержащий one hot encoding бассейнов.
+                            В случае, если 'use_basin_id_encoding' установлено в False в config, x_one_hot не будет
+                            присутствовать.
                             
-                        Note: If the input data are available at multiple frequencies (via use_frequencies), each input
-                            dictionary key will have a suffix "_{freq}" indicating the corresponding value's frequency.
+                        Примечание: Если входные данные доступны на нескольких частотах (через use_frequencies),
+                            каждый ключ входного словаря будет иметь суффикс "_{freq}", указывающий на частоту
+                            соответствующего значения.
 
-                Returns
+                Возвращает
                 -------
-                The network prediction has to be returned under the dictionary key 'y_hat' (or, if multiple frequencies
-                are predicted, 'y_hat_{freq}'. Furthermore, make sure to return predictions for each time step, even if
-                you want to train sequence-to-one. Which predictions are used for training the network is controlled in
-                the train_epoch() function in neuralprognoz/training/basetrainer.py. Other return values should be the
-                hidden states as 'h_n' and cell states 'c_n'. Further return values are possible.
+                Предсказание сети должно быть возвращено под ключом словаря 'y_hat' (или, если предсказывается
+                несколько частот, 'y_hat_{freq}'. Кроме того, убедитесь, что возвращаются предсказания для каждого
+                временного шага, даже если вы хотите обучить sequence-to-one. Какие предсказания используются для
+                обучения сети контролируется в функции train_epoch() в neuralprognoz/training/basetrainer.py.
+                Другие возвращаемые значения должны быть скрытыми состояниями в виде 'h_n' и cell states 'c_n'.
+                Возможны и другие возвращаемые значения.
                 """
-        ###############################
-        # Implement forward pass here #
-        ###############################
+        ###################################
+        # Реализовать прямой проход здесь #
+        ###################################
         pass

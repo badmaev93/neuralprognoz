@@ -22,7 +22,7 @@ def convert_wind_speed_10m_to_2m(wind_speed_10m: np.ndarray, roughness_length: f
     - d = zero-plane displacement (смещение нулевой плоскости)
     - z = высота измерения (10м)
     
-    Parameters
+    Параметры
     ----------
     wind_speed_10m : np.ndarray
         Скорость ветра на высоте 10м [м/с].
@@ -35,7 +35,7 @@ def convert_wind_speed_10m_to_2m(wind_speed_10m: np.ndarray, roughness_length: f
         - Сельхозкультуры: 0.12м (по умолчанию)
         - Лес: 1-2м
         
-    Returns
+    Возвращает
     -------
     np.ndarray
         Скорость ветра на высоте 2м [м/с].
@@ -68,7 +68,7 @@ def calculate_seasonal_roughness_length(doy: np.ndarray, land_use_type: str = "a
     """
     Рассчитывает сезонный коэффициент шероховатости поверхности.
     
-    Parameters
+    Параметры
     ----------
     doy : np.ndarray
         День года [1-366].
@@ -81,7 +81,7 @@ def calculate_seasonal_roughness_length(doy: np.ndarray, land_use_type: str = "a
         - "water": водная поверхность
         - "urban": городская застройка
         
-    Returns
+    Возвращает
     -------
     np.ndarray
         Коэффициент шероховатости [м] для каждого дня года.
@@ -158,12 +158,12 @@ def fao56_wind_conversion(wind_speed_10m: np.ndarray) -> np.ndarray:
     
     u_2 = u_z * [4.87 / ln(67.8 * z - 5.42)]
     
-    Parameters
+    Параметры
     ----------
     wind_speed_10m : np.ndarray
         Скорость ветра на высоте 10м [м/с].
         
-    Returns
+    Возвращает
     -------
     np.ndarray
         Скорость ветра на высоте 2м [м/с].
@@ -186,7 +186,7 @@ def convert_wind_speed_10m_to_2m_seasonal(
     """
     Преобразует скорость ветра с высоты 10м на высоту 2м с учетом сезонной изменчивости шероховатости.
     
-    Parameters
+    Параметры
     ----------
     wind_speed_10m : np.ndarray
         Скорость ветра на высоте 10м [м/с].
@@ -195,7 +195,7 @@ def convert_wind_speed_10m_to_2m_seasonal(
     land_use_type : str, optional
         Тип землепользования. По умолчанию "agricultural".
         
-    Returns
+    Возвращает
     -------
     np.ndarray
         Скорость ветра на высоте 2м [м/с].

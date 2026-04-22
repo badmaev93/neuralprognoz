@@ -1,0 +1,99 @@
+
+# --- ОБЩИЕ НАСТРОЙКИ ---
+experiment_name: kolyma_annual_lstm
+dataset: generic
+data_dir: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset
+
+# --- УСТРОЙСТВО ---
+device: cuda:0
+seed: 42
+num_workers: 0
+
+# --- ДАННЫЕ ---
+train_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/train_basins.txt
+validation_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/validation_basins.txt
+test_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/test_basins.txt
+
+# --- ПЕРИОДЫ (НЕПРЕРЫВНЫЕ) ---
+train_start_date: 
+  - '01/01/1950'
+train_end_date: 
+  - '31/12/2015'
+
+# Валидация на периоде 2016-2019
+validation_start_date: 
+  - '01/01/2016'
+validation_end_date: 
+  - '31/12/2019'
+
+# Тест на последних годах (2020-2024)
+test_start_date: 
+  - '01/06/2020'
+  - '01/06/2021'
+  - '01/06/2022'
+  - '01/06/2023'
+  - '01/06/2024'
+  
+test_end_date: 
+  - '30/09/2020'
+  - '30/09/2021'
+  - '30/09/2022'
+  - '30/09/2023'
+  - '30/09/2024'
+
+# --- ПЕРЕМЕННЫЕ ---
+target_variables:
+  - streamflow
+
+dynamic_inputs:
+  # Осадки и температура
+  - precipitation
+  - temperature_mean
+  - temperature_min 
+  - temperature_max  
+  - snowfall
+  - snowmelt
+  - snow_fraction
+  - pet_priestley_taylor
+  - month_sin
+  - month_cos
+  - p_rolling_3m
+  - t_rolling_3m
+  - aridity_index
+
+# --- МОДЕЛЬ ---
+model: cudalstm
+head: regression
+hidden_size: 256
+initial_forget_bias: 3
+output_dropout: 0.4
+
+# --- ОБУЧЕНИЕ ---
+optimizer: AdamW
+loss: MaskedHybridDiffLoss
+learning_rate: 0.001
+batch_size: 64           
+epochs: 50
+clip_gradient_norm: 1.0
+
+seq_length: 24
+predict_last_n: 3         
+
+dynamic_learning_rate: True
+patience_dynamic_learning_rate: 5
+factor_dynamic_learning_rate: 0.5
+
+metrics:
+  - NSE
+  - KGE
+  - RMSE
+
+validate_every: 1
+save_validation_results: True
+save_weights_every: 1
+early_stopping: True
+patience_early_stopping: 10
+minimum_epochs_before_early_stopping: 10
+
+log_tensorboard: True
+cache_validation_data: True

@@ -18,63 +18,63 @@ LOGGER = logging.getLogger(__name__)
 class ODELSTM(BaseModel):
     """ODE-LSTM from [#]_.
 
-    An ODE-RNN post-processes the hidden state of a normal LSTM.
-    Parts of this code are derived from https://github.com/mlech26l/learning-long-term-irregular-ts.
+    ODE-RNN пост-обрабатывает скрытое состояние обычного LSTM.
+    Части этого кода заимствованы из https://github.com/mlech26l/learning-long-term-irregular-ts.
     
-    The forward pass in this model works somewhat differently than the other models, because ODE-LSTM relies on
-    irregularly timed samples. To simulate such irregularity, we aggregate parts of the input sequence to random
-    frequencies. While doing so, we try to take care that we don't aggregate too coarsely right before the model
-    should create a high-frequency prediction.
+    Прямой проход в этой модели работает несколько иначе, чем в других моделях, поскольку ODE-LSTM полагается на
+    выборки с нерегулярными интервалами. Чтобы смоделировать такую нерегулярность, мы агрегируем части входной последовательности до случайных
+    частот. При этом мы стараемся не агрегировать слишком грубо непосредственно перед тем, как модель
+    должна создать прогноз с высокой частотой.
 
-    Since this aggregation means that parts of the input sequence are at random frequencies, we cannot easily
-    return predictions for the full input sequence at each frequency. Instead, we only return sequences of length
-    predict_last_n for each frequency (we do not apply the random aggregation to these last time steps).
+    Поскольку такая агрегация означает, что части входной последовательности находятся на случайных частотах, мы не можем легко
+    вернуть прогнозы для полной входной последовательности на каждой частоте. Вместо этого мы возвращаем только последовательности длины
+    predict_last_n для каждой частоты (мы не применяем случайную агрегацию к этим последним временным шагам).
 
-    The following describes the aggregation strategy implemented in the forward method:
+    Ниже описывается стратегия агрегации, реализованная в прямом проходе:
 
-    1. slice one: random-frequency steps (cfg.ode_random_freq_lower_bound <= freq <= lowest-freq) until beginning
-                  of the second-lowest frequency input sequence.
-    2. slice two: random-frequency steps (lowest-freq <= freq <= self._frequencies[1]) until beginning of
-                  next-higher frequency input sequence.
-    3. repeat step two until beginning of highest-frequency input sequence.
-    4. slice three: random-frequency steps (self._frequencies[-2] <= freq <= highest-freq) until predict_last_n
-                    of the lowest frequency.
-    5. lowest-frequency steps to generate predict_last_n lowest-frequency predictions.
-    6. repeat steps four and five for the next-higher frequency (using the same random-frequency bounds but
-       generating predictions for the next-higher frequency).
+    1. срез один: шаги случайной частоты (cfg.ode_random_freq_lower_bound <= freq <= lowest-freq) до начала
+                  второй по частоте входной последовательности.
+    2. срез два: шаги случайной частоты (lowest-freq <= freq <= self._frequencies[1]) до начала
+                  следующей по частоте входной последовательности.
+    3. повторить срез два до начала самой высокой по частоте входной последовательности.
+    4. срез три: шаги случайной частоты (self._frequencies[-2] <= freq <= highest-freq) до predict_last_n
+                    самой низкой частоты.
+    5. шаги самой низкой частоты для генерации predict_last_n прогнозов самой низкой частоты.
+    6. повторить шаги четыре и пять для следующей по частоте (используя те же границы случайной частоты, но
+       генерируя прогнозы для следующей по частоте).
        
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    References
+    Ссылки
     ----------
     .. [#] Lechner, M.; Hasani, R.: Learning Long-Term Dependencies in Irregularly-Sampled Time Series. arXiv, 2020,
         https://arxiv.org/abs/2006.04418.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # Укажите подмодули модели, которые впоследствии можно будет использовать для тонкой настройки. Имена должны соответствовать атрибутам класса.
     module_parts = ['lstm_cell', 'ode_cell', 'head']
 
     def __init__(self, cfg: Config):
         super(ODELSTM, self).__init__(cfg=cfg)
         if len(cfg.use_frequencies) < 2:
-            raise ValueError('ODELSTM needs at least two frequencies.')
+            raise ValueError('ODELSTM требует как минимум две частоты.')
         if isinstance(cfg.dynamic_inputs, dict) or isinstance(cfg.hidden_size, dict):
-            raise ValueError('ODELSTM does not support per-frequency input variables or hidden sizes.')
+            raise ValueError('ODELSTM не поддерживает входные переменные или размеры скрытого состояния для каждой частоты.')
         if isinstance(cfg.dynamic_inputs[0], list):
-            raise ValueError('ODELSTM does not support input feature groups.')
+            raise ValueError('ODELSTM не поддерживает группы входных признаков.')
 
-        # Note: be aware that frequency_factors and slice_timesteps have a slightly different meaning here vs. in
-        # MTSLSTM. Here, the frequency_factor is relative to the _lowest_ (not the next-lower) frequency.
-        # slice_timesteps[freq] is the input step (counting backwards) in the next-*lower* frequency from where on input
-        # data at frequency freq is available.
+        # Обратите внимание, что frequency_factors и slice_timesteps имеют несколько иное значение здесь по сравнению с
+        # MTSLSTM. Здесь frequency_factor относится к _самой низкой_ (а не к следующей по частоте) частоте.
+        # slice_timesteps[freq] — это шаг входных данных (подсчитываемый в обратном порядке) на следующей по частоте
+        # (более низкой) частоте, с которой доступны входные данные на частоте freq.
         self._frequency_factors = {}
         self._slice_timesteps = {}
         self._frequencies = sort_frequencies(cfg.use_frequencies)
         self._init_frequency_factors_and_slice_timesteps()
 
-        # start to count the number of inputs
+        # Начинаем подсчет количества входов
         self.input_size = len(cfg.dynamic_inputs + cfg.static_attributes + cfg.hydroatlas_attributes +
                               cfg.evolving_attributes)
         self._dynamic_inputs = cfg.dynamic_inputs
@@ -96,44 +96,44 @@ class ODELSTM(BaseModel):
         for i, freq in enumerate(self._frequencies):
             frequency_factor = get_frequency_factor(self._frequencies[0], freq)
             if frequency_factor != int(frequency_factor):
-                raise ValueError('Frequencies must be multiples of the lowest frequency.')
+                raise ValueError('Частоты должны быть кратны самой низкой частоте.')
             self._frequency_factors[freq] = int(frequency_factor)
 
             if i > 0:
                 prev_frequency_factor = get_frequency_factor(self._frequencies[i - 1], freq)
                 if self.cfg.predict_last_n[freq] % prev_frequency_factor != 0:
                     raise ValueError(
-                        'At all frequencies, predict_last_n must align with the steps of the next-lower frequency.')
+                        'На всех частотах predict_last_n должен совпадать с шагами следующей по частоте (более низкой) частоты.')
 
                 if self.cfg.seq_length[freq] > self.cfg.seq_length[self._frequencies[i - 1]] * prev_frequency_factor:
-                    raise ValueError('Higher frequencies must have shorter input sequences than lower frequencies.')
+                    raise ValueError('Частоты более высокого уровня должны иметь более короткие входные последовательности, чем частоты более низкого уровня.')
 
-                # we want to pass the state of the day _before_ the next higher frequency starts,
-                # because e.g. the mean of a day is stored at the same date at 00:00 in the morning.
+                # мы хотим передать состояние дня _перед_ началом следующей по частоте (более высокой) частоты,
+                # потому что, например, среднее значение за день сохраняется в тот же день в 00:00.
                 slice_timestep = self.cfg.seq_length[freq] / prev_frequency_factor
                 if slice_timestep != int(slice_timestep):
-                    raise ValueError('At all frequencies, seq_length must align with the next-lower frequency steps.')
+                    raise ValueError('На всех частотах seq_length должен совпадать с шагами следующей по частоте (более низкой) частоты.')
                 self._slice_timesteps[freq] = int(slice_timestep)
 
-                # in theory, the following conditions would be possible, but they would make the implementation
-                # quite complex and are probably hardly ever useful.
+                # теоретически возможны следующие условия, но они усложнили бы реализацию
+                # и, вероятно, редко бывают полезны.
                 if self.cfg.predict_last_n[self._frequencies[
                         i - 1]] < self.cfg.predict_last_n[freq] / prev_frequency_factor:
                     raise NotImplementedError(
-                        'Lower frequencies cannot have smaller predict_last_n values than higher ones.')
+                        'Частоты более низкого уровня не могут иметь меньшие значения predict_last_n, чем частоты более высокого уровня.')
 
         if any(self.cfg.predict_last_n[f] / self._frequency_factors[f] > self._slice_timesteps[self._frequencies[-1]] /
                self._frequency_factors[self._frequencies[-2]] for f in self._frequencies):
-            raise NotImplementedError('predict_last_n cannot be larger than sequence length of highest frequency.')
+            raise NotImplementedError('predict_last_n не может быть больше, чем длина последовательности самой высокой частоты.')
 
     def _prepare_inputs(self, data: Dict[str, torch.Tensor],
                         freq: str) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-        """Concat all different inputs to the time series input. """
+        """Объединяет все различные входы во входные данные временного ряда. """
         suffix = f"_{freq}"
-        # transpose to [seq_length, batch_size, n_features]
+        # транспонирование в [seq_length, batch_size, n_features]
         x_d = torch.cat([data[f'x_d{suffix}'][k] for k in self._dynamic_inputs], dim=-1).transpose(0, 1)
 
-        # concat all inputs
+        # объединение всех входов
         if f'x_s{suffix}' in data and 'x_one_hot' in data:
             x_s = data[f'x_s{suffix}'].unsqueeze(0).repeat(x_d.shape[0], 1, 1)
             x_one_hot = data['x_one_hot'].unsqueeze(0).repeat(x_d.shape[0], 1, 1)
@@ -147,14 +147,14 @@ class ODELSTM(BaseModel):
         else:
             pass
 
-        # add frequency indicator. This will not be used as normal input, but the ODE-RNN uses it to determine the
-        # elapsed time since the last sample.
+        # добавить индикатор частоты. Он не будет использоваться как обычный вход, но ODE-RNN использует его для определения
+        # прошедшего времени с момента последнего образца.
         frequency_factor = 1 / self._frequency_factors[freq]
         frequency_encoding = torch.ones(x_d.shape[0], x_d.shape[1], 1).to(x_d) * frequency_factor
         return torch.cat([x_d, frequency_encoding], dim=-1)
 
     def _randomize_freq(self, x_d: torch.Tensor, low_frequency: str, high_frequency: str) -> torch.Tensor:
-        """Randomize the frequency of the  input sequence. """
+        """Рандомизировать частоту входной последовательности """
         frequency_factor = int(get_frequency_factor(low_frequency, high_frequency))
         possible_aggregate_steps = list(filter(lambda n: frequency_factor % n == 0, range(1, frequency_factor + 1)))
 
@@ -164,15 +164,15 @@ class ODELSTM(BaseModel):
         while t < max_t:
             highfreq_slice = x_d[t * frequency_factor:(t + 1) * frequency_factor]
 
-            # aggregate to a random frequency between low and high
+            # аггрегировать в рандомную частоту м-ду low и high
             random_aggregate_steps = np.random.choice(possible_aggregate_steps)
             if highfreq_slice.shape[0] % random_aggregate_steps == 0:
                 randfreq_slice = highfreq_slice.view(-1, random_aggregate_steps, highfreq_slice.shape[1],
                                                      highfreq_slice.shape[2]).mean(dim=1)
-                # update the frequency indicators.
+                # обновить индикаторы частоты.
                 randfreq_slice[:, :, -1] = random_aggregate_steps / self._frequency_factors[high_frequency]
             else:
-                # do not randomize last slice if it doesn't align with aggregation steps
+                # не рандомизировать последний срез, если он не совпадает с шагами агрегации
                 randfreq_slice = highfreq_slice
             x_d_randomized.append(randfreq_slice)
 
@@ -181,17 +181,17 @@ class ODELSTM(BaseModel):
         return torch.cat(x_d_randomized, dim=0)
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the ODE-LSTM model.
+        """Выполнить прямой проход на модели ODE-LSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Input data for the forward pass. See the documentation overview of all models for details on the dict keys.
+            Входные данные для прямого прохода. См. документацию по всем моделям для получения подробной информации о ключах словаря.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model predictions for each target timescale.
+            Предсказания модели для каждого целевого масштаба времени.
         """
 
         x_d = {freq: self._prepare_inputs(data, freq) for freq in self._frequencies}
@@ -209,10 +209,10 @@ class ODELSTM(BaseModel):
         for freq in self._frequencies[1:-1]:
             to_randomize = x_d[freq][:-self._slice_timesteps[self._frequencies[i + 1]]]
 
-            # slice_timestep of this and the next frequency are identical, so we can move on to the next frequency
+            # slice_timestep текущей и следующей частоты идентичны, поэтому мы можем перейти к следующей частоте
             if len(to_randomize) == 0:
                 continue
-            # random-frequency steps until the beginning of the highest-frequency input sequence.
+            # random-frequency шаги до начала входной последовательности самой высокой частоты.
             slice_two = self._randomize_freq(to_randomize, prev_freq, freq)
             h_n, c_n = self._run_odelstm(slice_two, h_n[:, -1], c_n)
             prev_freq = freq
@@ -221,22 +221,22 @@ class ODELSTM(BaseModel):
         pred = {}
         prev_freq_end_step = 0
         for freq in self._frequencies:
-            # run random-frequency steps until predict_last_n of this frequency
+            # запустить random-frequency шаги до predict_last_n этой частоты
             end_step = -int(self.cfg.predict_last_n[freq] * self._frequency_factors[self._frequencies[-1]] /
                             self._frequency_factors[freq])
             if end_step == 0:
-                continue  # this means the current frequency should not be predicted, so we skip it.
+                continue  # это означает, что текущая частота не должна быть предсказана, поэтому мы пропускаем ее.
 
-            # check that the slice wouldn't be empty. If it wouldn't, this means that the previous frequency's
-            # predict_last_n is not aligned with this frequency's predict_last_n, so we can run random-frequency
-            # inputs until the beginning of this frequency's predict_last_n.
+            # проверить, что срез не будет пустым. Если он не будет, это означает, что predict_last_n предыдущей частоты
+            # не совпадает с predict_last_n этой частоты, поэтому мы можем запустить random-frequency
+            # входы до начала predict_last_n этой частоты.
             if end_step != prev_freq_end_step and end_step > -self.cfg.seq_length[self._frequencies[-1]]:
                 slice_three = self._randomize_freq(x_d[self._frequencies[-1]][prev_freq_end_step:end_step], prev_freq,
                                                    self._frequencies[-1])
                 h_n, c_n = self._run_odelstm(slice_three, h_n[:, -1], c_n)
                 prev_freq_end_step = end_step
 
-            # run predict_last_n steps at the target frequency
+            # запустить predict_last_n шаги на целевой частоте
             pred_slice = x_d[freq][-self.cfg.predict_last_n[freq]:]
             h_n_out, _ = self._run_odelstm(pred_slice, h_n[:, -1], c_n)
             pred[f'y_hat_{freq}'] = self.head(self.dropout(h_n_out))['y_hat']
@@ -245,14 +245,14 @@ class ODELSTM(BaseModel):
 
     def _run_odelstm(self, input_slice: torch.Tensor, h_0: torch.Tensor,
                      c_0: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Ingest `input_slice` into the ODE-LSTM and return hidden states and last cell state. """
+        """Выполнить прямой проход на модели ODE-LSTM. """
         h_x = (h_0, c_0)
 
         h_n = []
         for x_t in input_slice:
             h_0, c_0 = h_x
 
-            # separate frequency indicator from input variables
+            # отделяем frequency индикатор от входных переменных
             t_input = x_t[:, :-1]
             t_elapsed = x_t[0, -1]
 
@@ -262,25 +262,25 @@ class ODELSTM(BaseModel):
             h_x = (ode_out, lstm_out['c_n'])
             h_n.append(ode_out)
 
-        # stack h to [batch size, sequence length, hidden size]
+        # складываем h в [batch size, sequence length, hidden size]
         return torch.stack(h_n, 1), h_x[1]
 
 
 class _ODERNNCell(nn.Module):
-    """An ODE-RNN cell (Adapted from https://github.com/mlech26l/learning-long-term-irregular-ts) [#]_. 
+    """Ячейка ODE-RNN (Адаптировано из https://github.com/mlech26l/learning-long-term-irregular-ts) [#]_. 
     
-    Parameters
+    Параметры
     ----------
     input_size : int
-        Input dimension
+        Размерность входных данных
     hidden_size : int
-        Size of the cell's hidden state
+        Размерность скрытого состояния ячейки
     num_unfolds : int
-        Number of steps into which each timestep will be broken down to solve the ODE.
+        Количество шагов, на которые разбивается каждый временной шаг для решения ОДУ.
     method : {'euler', 'heun', 'rk4'}
-        Method to use for ODE solving (Euler's method, Heun's method, or Runge-Kutta 4)
+        Метод, используемый для решения ОДУ (метод Эйлера, метод Хейна или метод Рунге-Кутты 4)
     
-    References
+    Ссылки
     ----------
     .. [#] Lechner, M.; Hasani, R.: Learning Long-Term Dependencies in Irregularly-Sampled Time Series. arXiv, 2020,
         https://arxiv.org/abs/2006.04418.
@@ -305,28 +305,28 @@ class _ODERNNCell(nn.Module):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Reset the paramters of the ODERNNCell. """
+        """Сброс параметров ячейки ODERNN. """
         nn.init.orthogonal_(self.w_hh)
         nn.init.xavier_uniform_(self.w_ih)
         nn.init.zeros_(self.bias)
         nn.init.constant_(self.scale, 1.0)
 
     def forward(self, new_hidden_state: torch.Tensor, old_hidden_state: torch.Tensor, elapsed: float) -> torch.Tensor:
-        """Perform a forward pass on the ODERNNCell.
+        """Выполнить прямой проход на ячейке ODE-RNN.
         
-        Parameters
+        Параметры
         ----------
         new_hidden_state : torch.Tensor
-            The current hidden state to be updated by the ODERNNCell.
+            Текущее скрытое состояние, которое будет обновлено ячейкой ODE-RNN.
         old_hidden_state : torch.Tensor
-            The previous hidden state.
+            Предыдущее скрытое состояние.
         elapsed : float
-            Time elapsed between new and old hidden state.
+            Прошедшее время между новым и старым скрытым состоянием.
 
-        Returns
+        Возвращает
         -------
         torch.Tensor
-            Predicted new hidden state
+            Предсказанное новое скрытое состояние
         """
         delta_t = elapsed / self.num_unfolds
 

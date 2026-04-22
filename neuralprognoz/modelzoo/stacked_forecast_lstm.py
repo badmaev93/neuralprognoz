@@ -11,40 +11,39 @@ from neuralprognoz.modelzoo.fc import FC
 
 
 class StackedForecastLSTM(BaseModel):
-    """A forecasting model using stacked LSTMs for hindcast and forecast.
+    """Прогнозная модель, использующая стекированные LSTM для предыстории и прогноза.
 
-    This is a forecasting model that uses two stacked sequential (LSTM) models to handle 
-    hindcast vs. forecast.
+    Это прогнозная модель, которая использует две стекированные последовательные (LSTM) модели для обработки 
+    предыстории и прогноза.
         
-    The total sequence length ``seq_length`` config parameter must be equal to the total
+    Общая длина последовательности ``seq_length`` config parameter должна быть равна общей
     hindcast + forecast time ranges. 
     
-    The forecast sequence length ``forecast_seq_length`` config parameter must be equal
-    to the overlapping portion of the hindcast and forecast models plus the forecast
-    time period. 
+    Длина прогнозной последовательности ``forecast_seq_length`` config parameter должна быть равна
+    перекрывающейся части моделей предыстории и прогноза плюс прогнозный
+    период. 
     
-    The ``forecast_overlap`` config parameter must be set to the correct overlap
-    between these two sequences. 
+    Параметр ``forecast_overlap`` config parameter должен быть установлен на правильное перекрытие
+    между этими двумя последовательностями. 
     
-    For example, if we want to use a spinup period of 365 days to make a 7-day
-    forecast, then ``seq_length`` must be set to 372 (=365+7), ``forecast_seq_length``
-    must be set to 365, and ``forecast_overlap`` must be set to 358 (=365-7). 
+    Например, если мы хотим использовать период разгона в 365 дней для создания 7-дневного
+    прогноза, то ``seq_length`` должен быть установлен на 372 (=365+7), ``forecast_seq_length``
+    должен быть установлен на 365, а ``forecast_overlap`` должен быть установлен на 358 (=365-7). 
     
-    Outputs from the hindcast LSTM are concatenated to the input 
-    sequences to the forecast LSTM and shifted in time by the forecast horizon (7 days
-    in the example above. This causes a lag between the latest hindcast data and the
-    newest forecast time point, meaning that forecasts do not get information from the
-    most recent hindcast inputs. To solve this, set the
-    ``bidirectional_stacked_forecast_lstm`` config parameter to True, so that the
-    hindcast LSTM runs bidirectional and therefore all outputs from the hindcast
-    LSTM receive information from the most recent hindcast input data.
+    Выходы из LSTM предыстории объединяются с входными 
+    последовательностями для LSTM прогноза и сдвигаются во времени на горизонт прогноза (7 дней
+    в приведенном выше примере. Это вызывает задержку между последними данными предыстории и
+    новым временным шагом прогноза, что означает, что прогнозы не получают информацию от
+    самых последних входных данных предыстории. Чтобы решить эту проблему, установите
+    ``bidirectional_stacked_forecast_lstm`` config parameter в True, чтобы LSTM предыстории работала в двунаправленном режиме, и поэтому все выходы из LSTM предыстории
+    получают информацию от самых последних входных данных предыстории.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # определить субмодули модели, которые могут быть использованы для тонкой настройки. Имена должны совпадать с атрибутами класса
     module_parts = ['hindcast_embedding_net', 'forecast_embedding_net', 'forecast_lstm', 'hindcast_lstm', 'head']
 
     def __init__(self, cfg: Config):
@@ -75,53 +74,53 @@ class StackedForecastLSTM(BaseModel):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Специальная инициализация весов модели."""
         if self.cfg.initial_forget_bias is not None:
             self.hindcast_lstm.bias_hh_l0.data[self.hindcast_hidden_size:2 * self.hindcast_hidden_size] = self.cfg.initial_forget_bias
             self.forecast_lstm.bias_hh_l0.data[self.forecast_hidden_size:2 * self.forecast_hidden_size] = self.cfg.initial_forget_bias
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the StackedForecastLSTM model.
+        """Выполняет прямой проход на модели StackedForecastLSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - lstm_output_hindcast: Output sequence from the hindcast LSTM.
-                - lstm_output_forecast: Output sequence from the forecast LSTM.
-                - y_hat: Predictions over the sequence from the head layer.
+            Словарь, содержащий выходные данные модели и промежуточные состояния.
+                - lstm_output_hindcast: Выходная последовательность из LSTM предыстории.
+                - lstm_output_forecast: Выходная последовательность из LSTM прогноза.
+                - y_hat: Предсказанные значения за весь период прогноза.
 
-        Raises
+        Вызывает
         ------
-        ValueError if hindcast and forecast sequences are not equal.
+        ValueError если длины последовательностей предыстории и прогноза не равны.
         """
 
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, передать динамические и статические входы через слои встраивания, а затем объединить их
         x_h = self.hindcast_embedding_net(data)
         x_f = self.forecast_embedding_net(data)
 
         if x_h.shape[0] != x_f.shape[0]:
-            raise ValueError('Hindcast and forecast sequences must be equal.')
+            raise ValueError('Длины последовательностей предыстории и прогноза не равны.')
 
-        # run hindcast part of the lstm
+        # выполнить часть LSTM предыстории
         lstm_output_hindcast, _ = self.hindcast_lstm(input=x_h)
 
-        # LSTM here is NOT batch-first, thus why the transpose is necessary below.
-        # The LSTM output at this point is (seq, batch, dims).
-        forecast_inputs = torch.concat((x_f, lstm_output_hindcast), dim=-1)  # concat along variable dimension
+        # LSTM здесь НЕ является batch-first, поэтому транспонирование необходимо ниже.
+        # Выход LSTM в этой точке имеет размер (seq, batch, dims).
+        forecast_inputs = torch.concat((x_f, lstm_output_hindcast), dim=-1)  # конкатенация по переменной размерности
 
-        # run forecast part of the lstm
+        # выполнить часть LSTM прогноза
         lstm_output_forecast, _ = self.forecast_lstm(forecast_inputs)
         
         lstm_output_hindcast = lstm_output_hindcast.transpose(0, 1)
         lstm_output_forecast = lstm_output_forecast.transpose(0, 1)
 
-        # run head
+        # выполнить head
         pred = self.head(self.dropout(lstm_output_forecast))
 
         pred.update(

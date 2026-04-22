@@ -10,41 +10,41 @@ from neuralprognoz.utils.config import Config
 
 
 class SequentialForecastLSTM(BaseModel):
-    """A forecasting model that uses a single LSTM sequence with multiple embedding layers.
+    """Модель прогнозирования, использующая одну последовательность LSTM с несколькими слоями встраивания.
 
-    This is a forecasting model that uses a single sequential (LSTM) model that rolls 
-    out through both the hindcast and forecast sequences. The difference between this
-    and a standard ``CudaLSTM`` is (1) this model uses both hindcast and forecast
-    input features, and (2) it uses a separate embedding network for the hindcast
-    period and the forecast period. 
+    Это модель прогнозирования, которая использует одну последовательную (LSTM) модель, 
+    которая разворачивается как по последовательности предыстории, так и по последовательности прогноза. 
+    Отличие от стандартного ``CudaLSTM`` заключается в том, что (1) эта модель использует входные признаки 
+    как предыстории, так и прогноза, и (2) она использует отдельную сеть встраивания для периода предыстории
+    и периода прогноза. 
     
-    Do not use this model with ``forecast_overlap`` > 0.
+    Не используйте эту модель с ``forecast_overlap`` > 0.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    Raises
+    Ошибки
     ------
-    ValueError if forecast_overlap > 0
-    ValueError if forecast and hindcast embedding nets have different output sizes.
+    ValueError если forecast_overlap > 0
+    ValueError если forecast и hindcast embedding nets имеют разные выходные размеры.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # Укажите субмодули модели, которые могут быть использованы для дообучения. Имена должны совпадать с атрибутами класса
     module_parts = ['hindcast_embedding_net', 'forecast_embedding_net', 'lstm', 'head']
 
     def __init__(self, cfg: Config):
         super(SequentialForecastLSTM, self).__init__(cfg=cfg)
 
         if cfg.forecast_overlap:
-            raise ValueError('Forecast overlap cannot be set for a sequential forecasting model. '
-                             'Please set to None or remove from config file.')
+            raise ValueError('Прогноз перекрытия не может быть установлен для модели прогнозирования последовательности. '
+                             'Пожалуйста, установите значение None или удалите из файла конфигурации.')
 
         self.forecast_embedding_net = InputLayer(cfg, embedding_type='forecast')
         self.hindcast_embedding_net = InputLayer(cfg, embedding_type='hindcast')
 
         if self.forecast_embedding_net.output_size != self.hindcast_embedding_net.output_size:
-            raise ValueError('Forecast and hindcast embedding nets must have the same output size when using a sequential forecast LSTM.')
+            raise ValueError('Forecast и hindcast embedding сети должны иметь одинаковый выходной размер при использовании модели прогнозирования последовательности.')
 
         self.lstm = nn.LSTM(
             input_size=self.forecast_embedding_net.output_size,
@@ -58,47 +58,47 @@ class SequentialForecastLSTM(BaseModel):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Специальная инициализация определенных весов модели."""
         if self.cfg.initial_forget_bias is not None:
             self.lstm.bias_hh_l0.data[self.cfg.hidden_size:2 * self.cfg.hidden_size] = self.cfg.initial_forget_bias
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the SequentialForecastLSTM model.
+        """Выполнить прямой проход на модели SequentialForecastLSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - lstm_output_hindcast: Output sequence from the hindcast LSTM.
-                - lstm_output_forecast: Output sequence from the forecast LSTM.
-                - h_n_hindcast: Final hidden state of the hindcast model.
-                - c_n_hindcast: Final cell state of the hindcast model.
-                - h_n_forecast: Finall hidden state of the forecast model.
-                - c_n_forecast: Final cell state of the forecast model.
-                - y_hat: Predictions over the sequence from the head layer.
+            Словарь, содержащий выходные данные модели и промежуточные состояния.
+                - lstm_output_hindcast: Выходная последовательность из LSTM предыстории.
+                - lstm_output_forecast: Выходная последовательность из LSTM прогноза.
+                - h_n_hindcast: Конечное скрытое состояние модели предыстории.
+                - c_n_hindcast: Конечное состояние ячейки модели предыстории.
+                - h_n_forecast: Конечное скрытое состояние модели прогноза.
+                - c_n_forecast: Конечное состояние ячейки модели прогноза.
+                - y_hat: Прогнозы последовательности из головного слоя.
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, передать динамические и статические входы через слои встраивания, затем объединить их
         x_h = self.hindcast_embedding_net(data)
         x_f = self.forecast_embedding_net(data)
 
-        # run hindcast part of the lstm
+        # выполнить часть LSTM предыстории
         lstm_output_hindcast, (h_n_hindcast, c_n_hindcast) = self.lstm(input=x_h)
         lstm_output_hindcast = lstm_output_hindcast.transpose(0, 1)
 
-        # run forecast part of the lstm
+        # выполнить часть LSTM прогноза
         lstm_output_forecast, (h_n_forecast, c_n_forecast) = self.lstm(x_f, (h_n_hindcast, c_n_hindcast))
         lstm_output_forecast = lstm_output_forecast.transpose(0, 1)
 
-        # run head
+        # выполнить головной слой
         concatenated_predictions = torch.cat([lstm_output_hindcast, lstm_output_forecast], dim=1)
         pred = self.head(self.dropout(concatenated_predictions))
 
-        # reshape to [batch_size, seq, n_hiddens]
+        # изменить форму на [batch_size, seq, n_hiddens]
         h_n_hindcast = h_n_hindcast.transpose(0, 1)
         c_n_hindcast = c_n_hindcast.transpose(0, 1)
         h_n_forecast = h_n_forecast.transpose(0, 1)

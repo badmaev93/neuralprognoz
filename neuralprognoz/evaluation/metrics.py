@@ -22,7 +22,7 @@ def get_available_metrics() -> List[str]:
 
 def _validate_inputs(obs: DataArray, sim: DataArray):
     if obs.shape != sim.shape:
-        raise RuntimeError(f"Shapes of observations {obs.shape} and simulations {sim.shape} must match")
+        raise RuntimeError(f"Размеры наблюдений {obs.shape} и симуляций {sim.shape} должны совпадать")
 
 def _mask_valid(obs: DataArray, sim: DataArray) -> Tuple[DataArray, DataArray]:
     idx = (~sim.isnull()) & (~obs.isnull())
@@ -32,11 +32,9 @@ def _mask_valid(obs: DataArray, sim: DataArray) -> Tuple[DataArray, DataArray]:
 
 def _check_all_nan(obs: DataArray, sim: DataArray):
     if all(obs.isnull()):
-        raise AllNaNError("All observed values are NaN")
+        raise AllNaNError("Все наблюдаемые значения - NaN")
     if all(sim.isnull()):
-        raise AllNaNError("All simulated values are NaN")
-
-# --- СТАНДАРТНЫЕ МЕТРИКИ ---
+        raise AllNaNError("Все симулированные значения - NaN")
 
 def nse(obs: DataArray, sim: DataArray) -> float:
     _validate_inputs(obs, sim)
@@ -60,17 +58,13 @@ def rmse(obs: DataArray, sim: DataArray) -> float:
     obs, sim = _mask_valid(obs, sim)
     return float(np.sqrt(((sim - obs)**2).mean()))
 
-# --- ВАША НОВАЯ МЕТРИКА ---
-
 def s_sigma_delta(obs: DataArray, sim: DataArray) -> float:
-    """Calculate S/sigma_delta metric according to Russian hydrological methodology.
-    Values <= 0.8 indicate effective forecasting.
+    """Рассчет S/sigma_delta по русской гидрологической методологии.
+    Значения <= 0.8 указывают на эффективное прогнозирование.
     """
-    # Конвертируем в numpy и плющим, если нужно
     obs_vals = obs.values.flatten() if hasattr(obs, 'values') else np.array(obs).flatten()
     sim_vals = sim.values.flatten() if hasattr(sim, 'values') else np.array(sim).flatten()
     
-    # Убираем NaN
     mask = ~(np.isnan(obs_vals) | np.isnan(sim_vals))
     obs_vals = obs_vals[mask]
     sim_vals = sim_vals[mask]
@@ -78,25 +72,21 @@ def s_sigma_delta(obs: DataArray, sim: DataArray) -> float:
     if len(obs_vals) < 2:
         return np.nan
     
-    # Расчет S (RMSE прогноза)
     s_model = np.sqrt(np.mean((obs_vals - sim_vals)**2))
     
-    # Расчет sigma_delta (СКО изменений факта)
-    # Используем np.diff для получения изменений (Q_t - Q_{t-1})
-    # Важно: это работает корректно, если ряд непрерывный. 
-    # Если ряд рваный (только 3-и кварталы), sigma_delta может считаться некорректно на стыках.
-    # Но для оценки "в целом" по массиву точек подход допустим.
+    delta_changes = np.diff(obs_vals)
+    
+    if len(delta_changes) == 0:
+        return np.nan
     delta_changes = np.diff(obs_vals)
     
     if len(delta_changes) == 0:
         return np.nan
         
-    # Стандартная формула СКО (с n-1 в знаменателе для несмещенной оценки)
     sigma_delta = np.std(delta_changes, ddof=1)
     
     return float(s_model / sigma_delta) if sigma_delta > 0 else np.nan
 
-# --- СБОРЩИК МЕТРИК ---
 
 def calculate_metrics(obs: DataArray, sim: DataArray, metrics: List[str], resolution: str="1D", datetime_coord: str=None) -> Dict[str, float]:
     _check_all_nan(obs, sim)

@@ -40,7 +40,7 @@ class BaseDataset(Dataset):
         self.is_train = is_train
 
         if period not in ["train", "validation", "test"]:
-            raise ValueError("'period' must be one of 'train', 'validation' or 'test' ")
+            raise ValueError("'period' должен быть одним из 'train', 'validation' или 'test' ")
         else:
             self.period = period
 
@@ -416,7 +416,6 @@ class BaseDataset(Dataset):
                 df = df.sort_index(axis=0, ascending=True)
                 df = df.reindex(pd.DatetimeIndex(data=pd.date_range(df.index[0], df.index[-1], freq=native_frequency), name=df.index.name))
                 
-                # ИСПРАВЛЕННЫЙ БЛОК
                 dtype_map = {col: np.float32 for col in df.columns if pd.api.types.is_numeric_dtype(df[col])}
                 xr = xarray.Dataset.from_dataframe(df.astype(dtype_map))
                 
@@ -640,7 +639,6 @@ class BaseDataset(Dataset):
                 attributes = df.loc[df.index == basin].values.flatten()
                 self._attributes[basin] = torch.from_numpy(attributes.astype(np.float32))
 
-    #  ИСПРАВЛЕННЫЙ МЕТОД
     def _load_data(self):
         self._load_combined_attributes()
         xr = self._load_or_create_xarray_dataset()
@@ -673,7 +671,6 @@ class BaseDataset(Dataset):
         
         self._create_lookup_table(xr)
 
-    # ФИНАЛЬНЫЙ ИСПРАВЛЕННЫЙ МЕТОД
     def _setup_normalization(self, xr: xarray.Dataset):
         """Get feature-wise center and scale values for feature normalization"""
         all_input_vars = self.cfg.target_variables + self.cfg.dynamic_inputs_flattened

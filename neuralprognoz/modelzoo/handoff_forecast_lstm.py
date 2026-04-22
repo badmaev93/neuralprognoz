@@ -10,36 +10,38 @@ from neuralprognoz.modelzoo.head import get_head
 from neuralprognoz.modelzoo.inputlayer import InputLayer
 
 class HandoffForecastLSTM(BaseModel):
-    """An encoder/decoder LSTM model class used for forecasting.
+    """Модель LSTM с передачей состояния (state-handoff) для прогнозирования.
 
-    This is a forecasting model that uses a state-handoff to transition from a hindcast sequence model to a forecast 
-    sequence (LSTM) model. The hindcast model is run from the past up to present (the issue time of the forecast) 
-    and then passes the cell state and hidden state of the LSTM into a (nonlinear) handoff network, which is then 
-    used to initialize the cell state and hidden state of a new LSTM that rolls out over the forecast period. 
-    The handoff network is implemented as a custom FC layer, which can have multiple layers. The handoff network is 
-    implemented using the ``state_handoff_network`` config parameter. The hindcast and forecast LSTMs have different 
-    weights and biases, different heads, and different embedding networks. The hidden size of the hindcast 
-    LSTM is set using the ``hindcast_hidden_size`` config parameter and the hidden size of the forecast LSTM is set 
-    using the ``forecast_hidden_size`` config parameter.
+    Это модель прогнозирования, которая использует передачу состояния для перехода от модели последовательности 
+    исторических данных (hindcast) к модели последовательности прогноза (forecast). Модель hindcast работает от 
+    прошлого до настоящего (времени выпуска прогноза), а затем передает состояние ячейки и скрытое состояние 
+    LSTM в (нелинейную) сеть передачи состояния (handoff network), которая затем используется для инициализации 
+    состояния ячейки и скрытого состояния новой LSTM, которая разворачивается на период прогноза. 
+    Сеть передачи состояния реализована как пользовательский слой FC, который может иметь несколько слоев. Сеть 
+    передачи состояния реализована с использованием параметра конфигурации ``state_handoff_network``. LSTM для hindcast и 
+    forecast имеют разные веса и смещения, разные головы и разные сети эмбеддингов. Размер скрытого состояния 
+    LSTM для hindcast устанавливается с использованием параметра конфигурации ``hindcast_hidden_size``, а размер 
+    скрытого состояния LSTM для forecast устанавливается с использованием параметра конфигурации ``forecast_hidden_size``.
 
-    The handoff forecast LSTM model can implement a delayed handoff as well, such that the handoff between the hindcast
-    and forecast LSTM occurs prior to the forecast issue time. This is controlled by the ``forecast_overlap`` parameter
-    in the config file, and the forecast and hindcast LSTMs will run concurrently for the number of timesteps indicated
-    by ``forecast_overlap``. We recommend using the ``ForecastOverlapMSERegularization`` regularization option to
-    regularize the loss function by (dis)agreement between the overlapping portion of the hindcast and forecast LSTMs.
-    This regularization term can be requested by setting the ``regularization`` parameter in the config file to include
+    Модель HandoffForecastLSTM может реализовывать отложенную передачу состояния, при которой передача между LSTM 
+    для hindcast и forecast происходит до времени выпуска прогноза. Это контролируется параметром ``forecast_overlap`` 
+    в файле конфигурации, и LSTM для forecast и hindcast будут работать одновременно в течение количества временных шагов, 
+    указанного в ``forecast_overlap``. Мы рекомендуем использовать опцию регуляризации ``ForecastOverlapMSERegularization`` 
+    для регуляризации функции потерь путем (не)согласия между перекрывающимися частями LSTM для hindcast и forecast.
+    Этот член регуляризации может быть запрошен путем установки параметра ``regularization`` в файле конфигурации, 
+    включив
     ``forecast_overlap``.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     
-    Raises
+    Вызывает
     ------
-    ValueError if a state_handoff_network is not specified.
+    ValueError если state_handoff_network не указан.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # указать субмодули модели, которые позже можно будет использовать для дообучения (finetuning). Имена должны совпадать с атрибутами класса
     module_parts = ['hindcast_embedding_net', 'forecast_embedding_net', 'hindcast_lstm', 'forecast_lstm', 'hindcast_head', 'forecast_head', 'handoff_net']
 
     def __init__(self, cfg: Config):
@@ -62,7 +64,7 @@ class HandoffForecastLSTM(BaseModel):
         )
 
         if not cfg.state_handoff_network:
-            raise ValueError('The handoff forecast LSTM requires a state handoff network specified in the config file.')
+            raise ValueError('Модель HandoffForecastLSTM требует указания сети передачи состояния в файле конфигурации.')
 
         self.handoff_net = FC(
             input_size=self.hindcast_hidden_size*2,
@@ -85,44 +87,44 @@ class HandoffForecastLSTM(BaseModel):
         self._reset_parameters()
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Специальная инициализация определенных весов модели."""
         if self.cfg.initial_forget_bias is not None:
             self.hindcast_lstm.bias_hh_l0.data[self.hindcast_hidden_size:2 * self.hindcast_hidden_size] = self.cfg.initial_forget_bias
             self.forecast_lstm.bias_hh_l0.data[self.forecast_hidden_size:2 * self.forecast_hidden_size] = self.cfg.initial_forget_bias
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the HandoffForecastLSTM model.
+        """Выполнить прямой проход модели HandoffForecastLSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - lstm_output_hindcast: Output sequence from the hindcast LSTM.
-                - lstm_output_hindcast_overlap: Output sequence from the hindcast model over the overlap period between forecast and hindcast LSTMs.
-                - lstm_output_forecast_overlap: Output sequence from the forecast model over the overlap period between forecast and hindcast LSTMs.
-                - lstm_output_forecast: Output sequence from the forecast LSTM.
-                - y_forecast: Predictions (after head layer) over the forecast period.
-                - y_forecast_overlap: Predictions from the forecast model over the overlap period between forecast and hindcast LSTMs.
-                - y_hindcast_overlap: Predictions from the hindcast model over the overlap period between forecast and hindcast LSTMs.
-                - y_hindcast: Predictions over the hindcast period.
-                - h_n_hindcast: Final hidden state of the hindcast model.
-                - c_n_hindcast: Final cell state of the hindcast model.
-                - h_n_handoff: Initial hidden state of the forecast model.
-                - c_n_handoff: Initial cell state of the forecast model.
-                - h_n_forecast: Finall hidden state of the forecast model.
-                - c_n_forecast: Final cell state of the forecast model.
-                - y_hat: Predictions over the sequence from the head layer. This is a concatenation of hindcast and forecast, and takes from hindcast for the overlap portion.
+            Словарь, содержащий выходные данные модели и промежуточные состояния.
+                - lstm_output_hindcast: Выходная последовательность из LSTM для hindcast.
+                - lstm_output_hindcast_overlap: Выходная последовательность из модели hindcast за период перекрытия между LSTM для forecast и hindcast.
+                - lstm_output_forecast_overlap: Выходная последовательность из модели forecast за период перекрытия между LSTM для forecast и hindcast.
+                - lstm_output_forecast: Выходная последовательность из LSTM для forecast.
+                - y_forecast: Предсказания (после слоя head) за период прогноза.
+                - y_forecast_overlap: Предсказания модели forecast за период перекрытия между LSTM для forecast и hindcast.
+                - y_hindcast_overlap: Предсказания модели hindcast за период перекрытия между LSTM для forecast и hindcast.
+                - y_hindcast: Предсказания за период hindcast.
+                - h_n_hindcast: Финальное скрытое состояние модели hindcast.
+                - c_n_hindcast: Финальное скрытое состояние модели hindcast.
+                - h_n_handoff: Начальное скрытое состояние модели forecast.
+                - c_n_handoff: Начальное скрытое состояние модели forecast.
+                - h_n_forecast: Финальное скрытое состояние модели forecast.
+                - c_n_forecast: Финальное скрытое состояние модели forecast.
+                - y_hat: Предсказания за период из слоя head. Это конкатенация hindcast и forecast, причем для периода перекрытия берется hindcast.
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, пропустить динамические и статические входные данные через embedding слои, а затем объединить их
         x_h = self.hindcast_embedding_net(data)
         x_f = self.forecast_embedding_net(data)
 
-        # run the hindcast lstm
+        # запустить LSTM для hindcast
         lstm_output_hindcast, (h_n_hindcast, c_n_hindcast) = self.hindcast_lstm(x_h[:self.initial_hindcast_seq_length, ...])
         lstm_output_hindcast = lstm_output_hindcast.transpose(0, 1)
         if x_h.shape[0] > self.initial_hindcast_seq_length:
@@ -131,20 +133,20 @@ class HandoffForecastLSTM(BaseModel):
         else:
             lstm_output_hindcast_overlap = None
 
-        # handoff initial state to forecast lstm
+        # передать начальное состояние в LSTM для forecast
         x = self.handoff_net(torch.cat([h_n_hindcast, c_n_hindcast], -1))
         initial_state = self.handoff_linear(x)
         h_n_handoff, c_n_handoff = initial_state.chunk(2, -1)
         h_n_handoff = h_n_handoff.contiguous()
         c_n_handoff = c_n_handoff.contiguous()
 
-        # run forecast lstm
+        # запустить LSTM для forecast
         lstm_output_forecast, (h_n_forecast, c_n_forecast) = self.forecast_lstm(x_f, (h_n_handoff, c_n_handoff))
         lstm_output_forecast = lstm_output_forecast.transpose(0, 1)
         lstm_output_forecast_overlap = lstm_output_forecast[:, :self.cfg.forecast_overlap, :]
         lstm_output_forecast = lstm_output_forecast[:, self.cfg.forecast_overlap:, :]
 
-        # run heads for hindcast and forecast
+        # запустить головы для hindcast и forecast
         y_hindcast = self.hindcast_head(self.dropout(lstm_output_hindcast))
         y_forecast = self.forecast_head(self.dropout(lstm_output_forecast))
         if x_h.shape[0] > self.initial_hindcast_seq_length:
@@ -155,7 +157,7 @@ class HandoffForecastLSTM(BaseModel):
             pred = {key: torch.cat([y_hindcast[key], y_forecast[key]], dim=1) for key in y_hindcast}
             y_hindcast_overlap, y_forecast_overlap = None, None
 
-        # reshape to [batch_size, seq, n_hiddens]
+        # изменить форму на [batch_size, seq, n_hiddens]
         h_n_hindcast = h_n_hindcast.transpose(0, 1)
         c_n_hindcast = c_n_hindcast.transpose(0, 1)
         h_n_handoff = h_n_handoff.transpose(0, 1)

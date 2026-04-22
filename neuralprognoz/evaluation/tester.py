@@ -31,21 +31,21 @@ LOGGER = logging.getLogger(__name__)
 
 
 class BaseTester(object):
-    """Base class to run inference on a model.
+    """Базовый класс для запуска инференса модели.
 
-    Use subclasses of this class to evaluate a trained model on its train, test, or validation period.
-    For regression settings, `RegressionTester` is used; for uncertainty prediction, `UncertaintyTester`.
+    Используйте подклассы этого класса для оценки обученной модели на ее обучающем, тестовом или валидационном периоде.
+    Для регрессионных задач используется `RegressionTester`; для предсказания неопределенности — `UncertaintyTester`.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     run_dir : Path
-        Path to the run directory.
+        Путь к директории запуска.
     period : {'train', 'validation', 'test'}, optional
-        The period to evaluate, by default 'test'.
+        Период для оценки, по умолчанию 'test'.
     init_model : bool, optional
-        If True, the model weights will be initialized with the checkpoint from the last available epoch in `run_dir`.
+        Если True, веса модели будут инициализированы чекпоинтом из последнего доступного эпохи в `run_dir`.
     """
 
     def __init__(self, cfg: Config, run_dir: Path, period: str = "test", init_model: bool = True):
@@ -55,9 +55,9 @@ class BaseTester(object):
         if period in ["train", "validation", "test"]:
             self.period = period
         else:
-            raise ValueError(f'Invalid period {period}. Must be one of ["train", "validation", "test"]')
+            raise ValueError(f'Неверный период {period}. Должен быть одним из ["train", "validation", "test"]')
 
-        # determine device
+        # определение устройства
         self._set_device()
 
         if self.init_model:
@@ -65,16 +65,16 @@ class BaseTester(object):
 
         self._disable_pbar = cfg.verbose == 0
 
-        # pre-initialize variables, defined in class methods
+        # предварительная инициализация переменных, определенных в методах класса
         self.basins = None
         self.scaler = None
         self.id_to_int = {}
         self.additional_features = []
 
-        # placeholder to store cached validation data
+        # заполнитель для хранения кэшированных данных проверки
         self.cached_datasets = {}
 
-        # initialize loss object to compute the loss of the evaluation data
+        # объект потерь для вычисления потерь данных оценки
         self.loss_obj = get_loss_obj(cfg)
         self.loss_obj.set_regularization_terms(get_regularization_obj(cfg=self.cfg))
 
@@ -85,14 +85,14 @@ class BaseTester(object):
             if self.cfg.device.startswith("cuda"):
                 gpu_id = int(self.cfg.device.split(':')[-1])
                 if gpu_id > torch.cuda.device_count():
-                    raise RuntimeError(f"This machine does not have GPU #{gpu_id} ")
+                    raise RuntimeError(f"На этой машине нет GPU #{gpu_id}")
                 else:
                     self.device = torch.device(self.cfg.device)
             elif self.cfg.device == "mps":
                 if torch.backends.mps.is_available():
                     self.device = torch.device("mps")
                 else:
-                    raise RuntimeError("MPS device is not available.")
+                    raise RuntimeError("MPS устройство недоступно.")
             else:
                 self.device = torch.device("cpu")
         else:
@@ -104,21 +104,21 @@ class BaseTester(object):
                 self.device = torch.device("cpu")
 
     def _load_run_data(self):
-        """Load run specific data from run directory"""
+        """Загрузка данных запуска из директории запуска"""
 
-        # get list of basins
+        # получение списка бассейнов
         self.basins = load_basin_file(getattr(self.cfg, f"{self.period}_basin_file"))
 
-        # load feature scaler
+        # загрузка масштабировщика признаков
         self.scaler = load_scaler(self.run_dir)
 
-        # check for old scaler files, where the center/scale parameters had still old names
+        # проверка старых файлов масштабировщика, где параметры центра/масштаба имели старые имена
         if "xarray_means" in self.scaler.keys():
             self.scaler["xarray_feature_center"] = self.scaler.pop("xarray_means")
         if "xarray_stds" in self.scaler.keys():
             self.scaler["xarray_feature_scale"] = self.scaler.pop("xarray_stds")
 
-        # load basin_id to integer dictionary for one-hot-encoding
+        # загрузка словаря basin_id в целое число для one-hot-encoding
         if self.cfg.use_basin_id_encoding:
             self.id_to_int = load_basin_id_encoding(self.run_dir)
 
@@ -127,7 +127,7 @@ class BaseTester(object):
                 self.additional_features.append(pickle.load(fp))
 
     def _get_weight_file(self, epoch: int):
-        """Get file path to weight file"""
+        """Получение пути к файлу весов"""
         if epoch is None:
             weight_file = sorted(list(self.run_dir.glob('model_epoch*.pt')))[-1]
         else:
@@ -136,14 +136,14 @@ class BaseTester(object):
         return weight_file
 
     def _load_weights(self, epoch: int = None):
-        """Load weights of a certain (or the last) epoch into the model."""
+        """Загрузка весов определенной (или последней) эпохи в модель."""
         weight_file = self._get_weight_file(epoch)
 
-        LOGGER.info(f"Using the model weights from {weight_file}")
+        LOGGER.info(f"Используются веса модели из {weight_file}")
         self.model.load_state_dict(torch.load(weight_file, map_location=self.device))
 
     def _get_dataset(self, basin: str) -> BaseDataset:
-        """Get dataset for a single basin."""
+        """Получение датасета для одного бассейна."""
         ds = get_dataset(cfg=self.cfg,
                          is_train=False,
                          period=self.period,
@@ -160,43 +160,43 @@ class BaseTester(object):
                  metrics: Union[list, dict] = [],
                  model: torch.nn.Module = None,
                  experiment_logger: Logger = None) -> dict:
-        """Evaluate the model.
+        """Оценка модели.
         
-        Parameters
+        Параметры
         ----------
         epoch : int, optional
-            Define a specific epoch to evaluate. By default, the weights of the last epoch are used.
+            Определяет конкретную эпоху для оценки. По умолчанию используются веса последней эпохи.
         save_results : bool, optional
-            If True, stores the evaluation results in the run directory. By default, True.
+            Если True, сохраняет результаты оценки в директории запуска. По умолчанию True.
         save_all_output : bool, optional
-            If True, stores all of the model output in the run directory. By default, False.
+            Если True, сохраняет весь вывод модели в директории запуска. По умолчанию False.
         metrics : Union[list, dict], optional
-            List of metrics to compute during evaluation. Can also be a dict that specifies per-target metrics
+            Список метрик для вычисления во время оценки. Также может быть словарем, который указывает метрики для каждой цели.
         model : torch.nn.Module, optional
-            If a model is passed, this is used for validation.
+            Если передана модель, она используется для валидации.
         experiment_logger : Logger, optional
-            Logger can be passed during training to log metrics
+            Логгер может быть передан во время обучения для логирования метрик.
 
-        Returns
+        Возвращает
         -------
         dict
-            A dictionary containing one xarray per basin with the evaluation results.
+            Словарь, содержащий один xarray на бассейн с результатами оценки.
         """
         if model is None:
             if self.init_model:
                 self._load_weights(epoch=epoch)
                 model = self.model
             else:
-                raise RuntimeError("No model was initialized for the evaluation")
+                raise RuntimeError("Модель не была инициализирована для оценки")
 
-        # during validation, depending on settings, only evaluate on a random subset of basins
+        # во время валидации, в зависимости от настроек, оцениваем только на случайной подвыборке бассейнов
         basins = self.basins
         if self.period == "validation":
             if len(basins) > self.cfg.validate_n_random_basins:
                 random.shuffle(basins)
                 basins = basins[:self.cfg.validate_n_random_basins]
 
-        # force model to train-mode when doing mc-dropout evaluation
+        # принудительный перевод модели в режим обучения при выполнении mc-dropout оценки
         if self.cfg.mc_dropout:
             model.train()
         else:
@@ -216,7 +216,7 @@ class BaseTester(object):
                 try:
                     ds = self._get_dataset(basin)
                 except NoEvaluationDataError as error:
-                    # skip basin
+                    # пропуск бассейна
                     continue
                 if self.cfg.cache_validation_data and self.period == "validation":
                     self.cached_datasets[basin] = ds
@@ -226,13 +226,13 @@ class BaseTester(object):
             y_hat, y, dates, all_losses, all_output[basin] = self._evaluate(model, loader, ds.frequencies,
                                                                             save_all_output)
 
-            # log loss of this basin plus number of samples in the logger to compute epoch aggregates later
+            # логирование потерь этого бассейна плюс количества образцов в логгере для последующего вычисления агрегатов эпохи
             if experiment_logger is not None:
                 experiment_logger.log_step(**{k: (v, len(loader)) for k, v in all_losses.items()})
 
             predict_last_n = self.cfg.predict_last_n
             seq_length = self.cfg.seq_length
-            # if predict_last_n/seq_length are int, there's only one frequency
+            # если predict_last_n/seq_length являются int, существует только одна частота
             if isinstance(predict_last_n, int):
                 predict_last_n = {ds.frequencies[0]: predict_last_n}
             if isinstance(seq_length, int):
@@ -240,37 +240,37 @@ class BaseTester(object):
             lowest_freq = sort_frequencies(ds.frequencies)[0]
             for freq in ds.frequencies:
                 if predict_last_n[freq] == 0:
-                    continue  # this frequency is not being predicted
+                    continue  # эта частота не прогнозируется
                 results[basin][freq] = {}
 
-                # rescale observations
+                # масштабирование наблюдений
                 # Получаем scaler для target_variables, используя правильное индексирование
                 target_vars = self.cfg.target_variables
                 feature_scaler = self.scaler["xarray_feature_scale"].sel(variable=target_vars).values
                 feature_center = self.scaler["xarray_feature_center"].sel(variable=target_vars).values
                 y_freq = y[freq] * feature_scaler + feature_center
-                # rescale predictions
+                # масштабирование прогнозов
                 if y_hat[freq].ndim == 3 or (len(feature_scaler) == 1):
                     y_hat_freq = y_hat[freq] * feature_scaler + feature_center
                 elif y_hat[freq].ndim == 4:
-                    # if y_hat has 4 dim and we have multiple features we expand the dimensions for scaling
+                    # если y_hat имеет 4 измерения, а у нас несколько признаков, мы расширяем измерения для масштабирования
                     feature_scaler = np.expand_dims(feature_scaler, (0, 1, 3))
                     feature_center = np.expand_dims(feature_center, (0, 1, 3))
                     y_hat_freq = y_hat[freq] * feature_scaler + feature_center
                 else:
-                    raise RuntimeError(f"Simulations have {y_hat[freq].ndim} dimension. Only 3 and 4 are supported.")
+                    raise RuntimeError(f"Симуляции имеют {y_hat[freq].ndim} измерений. Поддерживаются только 3 и 4.")
 
-                # Create data_vars dictionary for the xarray.Dataset
+                # Создание словаря data_vars для xarray.Dataset
                 data_vars = self._create_xarray_data_vars(y_hat_freq, y_freq)
 
-                # freq_range are the steps of the current frequency at each lowest-frequency step
+                # freq_range - это шаги текущей частоты на каждом шаге самой низкой частоты
                 frequency_factor = int(get_frequency_factor(lowest_freq, freq))
 
-                # Create coords dictionary for the xarray.Dataset. 'date' can be directly infered from the dates
-                # dictionary. We index the sample by the date of the last timestep of the sequence. The 'time_step'
-                # index that specifies the position in the output sequence (relative to the end) can be inferred by
-                # computing the timedelta of the dates. To account for predict_last_n > 1 and multi-freq stuff, we
-                # need to add the frequency factor and remove 1 (to start at zero).
+                # Создание словаря coords для xarray.Dataset. 'date' может быть напрямую выведен из словаря dates.
+                # Мы индексируем выборку по дате последнего временного шага последовательности. Индекс 'time_step',
+                # указывающий позицию в выходной последовательности (относительно конца), может быть выведен путем
+                # вычисления разницы во времени дат. Чтобы учесть predict_last_n > 1 и многочастотность, нам нужно
+                # добавить фактор частоты и вычесть 1 (чтобы начать с нуля).
                 coords = {
                     'date':
                         dates[lowest_freq][:, -1],
@@ -285,33 +285,33 @@ class BaseTester(object):
                 })
                 results[basin][freq]['xr'] = xr
 
-                # create datetime range at the current frequency
+                # создание диапазона дат на текущей частоте
                 freq_date_range = pd.date_range(start=dates[lowest_freq][0, -1], end=dates[freq][-1, -1], freq=freq)
-                # remove datetime steps that are not being predicted from the datetime range
+                # удаление временных шагов, которые не прогнозируются, из диапазона дат
                 mask = np.ones(frequency_factor).astype(bool)
                 mask[:-predict_last_n[freq]] = False
                 freq_date_range = freq_date_range[np.tile(mask, len(xr['date']))]
 
-                # only warn once per freq
+                # только один раз предупреждать за частоту
                 if frequency_factor < predict_last_n[freq] and basin == basins[0]:
-                    tqdm.write(f'Metrics for {freq} are calculated over last {frequency_factor} elements only. '
-                               f'Ignoring {predict_last_n[freq] - frequency_factor} predictions per sequence.')
+                    tqdm.write(f'Метрики для {freq} рассчитываются только по последним {frequency_factor} элементам. '
+                               f'Игнорируется {predict_last_n[freq] - frequency_factor} прогнозов на последовательность.')
 
                 if metrics:
                     for target_variable in self.cfg.target_variables:
-                        # stack dates and time_steps so we don't just evaluate every 24h when use_frequencies=[1D, 1h]
+                        # объединение дат и временных шагов, чтобы не оценивать только каждые 24 часа при использовании use_frequencies=[1D, 1h]
                         obs = xr.isel(time_step=slice(-frequency_factor, None)) \
                             .stack(datetime=['date', 'time_step']) \
                             .drop_vars({'datetime', 'date', 'time_step'})[f"{target_variable}_obs"]
                         obs['datetime'] = freq_date_range
-                        # check if there are observations for this period
+                        # проверка наличия наблюдений за этот период
                         if not all(obs.isnull()):
                             sim = xr.isel(time_step=slice(-frequency_factor, None)) \
                                 .stack(datetime=['date', 'time_step']) \
                                 .drop_vars({'datetime', 'date', 'time_step'})[f"{target_variable}_sim"]
                             sim['datetime'] = freq_date_range
 
-                            # clip negative predictions to zero, if variable is listed in config 'clip_target_to_zero'
+                            # обрезка отрицательных прогнозов до нуля, если переменная указана в config 'clip_target_to_zero'
                             if target_variable in self.cfg.clip_targets_to_zero:
                                 sim = xarray.where(sim < 0, 0, sim)
 
@@ -331,10 +331,10 @@ class BaseTester(object):
                                 LOGGER.warning(msg)
                                 values = {metric: np.nan for metric in var_metrics}
 
-                            # add variable identifier to metrics if needed
+                            # добавление идентификатора переменной к метрикам, если необходимо
                             if len(self.cfg.target_variables) > 1:
                                 values = {f"{target_variable}_{key}": val for key, val in values.items()}
-                            # add frequency identifier to metrics if needed
+                            # добавление идентификатора частоты к метрикам, если необходимо
                             if len(ds.frequencies) > 1:
                                 values = {f"{key}_{freq}": val for key, val in values.items()}
                             if experiment_logger is not None:
@@ -342,15 +342,15 @@ class BaseTester(object):
                             for k, v in values.items():
                                 results[basin][freq][k] = v
 
-        # convert default dict back to normal Python dict to avoid unexpected behavior when trying to access
-        # a non-existing basin
+        # преобразование default dict обратно в обычный словарь Python, чтобы избежать неожиданного поведения при попытке доступа
+        # к несуществующему бассейну
         results = dict(results)
 
         if (self.period == "validation") and (self.cfg.log_n_figures > 0) and (experiment_logger
                                                                                is not None) and results:
             self._create_and_log_figures(results, experiment_logger, epoch)
 
-        # save model output to file, if requested
+        # сохранение выходных данных модели в файл, если запрошено
         results_to_save = None
         states_to_save = None
         if save_results:
@@ -373,30 +373,30 @@ class BaseTester(object):
                     xr = results[basins[i]][freq]['xr']
                     obs = xr[f"{target_var}_obs"].values
                     sim = xr[f"{target_var}_sim"].values
-                    # clip negative predictions to zero, if variable is listed in config 'clip_target_to_zero'
+                    # обрезка отрицательных прогнозов до нуля, если переменная указана в config 'clip_target_to_zero'
                     if target_var in self.cfg.clip_targets_to_zero:
                         sim = xarray.where(sim < 0, 0, sim)
                     figures.append(
                         self._get_plots(
                             obs, sim, title=f"{target_var} - Basin {basins[i]} - Epoch {epoch} - Frequency {freq}")[0])
-                # make sure the preamble is a valid file name
+                # убедиться, что преамбула является допустимым именем файла
                 experiment_logger.log_figures(figures, freq, preamble=re.sub(r"[^A-Za-z0-9\._\-]+", "", target_var))
 
     def _save_results(self, results: Optional[dict], states: Optional[dict] = None, epoch: int = None):
-        """Store results in various formats to disk.
+        """Сохранение результатов в различных форматах на диск.
         
-        Developer note: We cannot store the time series data (the xarray objects) as netCDF file but have to use
-        pickle as a wrapper. The reason is that netCDF files have special constraints on the characters/symbols that can
-        be used as variable names. However, for convenience we will store metrics, if calculated, in a separate csv-file.
+        Примечание разработчика: Мы не можем сохранить временные ряды (объекты xarray) в виде файла netCDF, а должны использовать
+        pickle в качестве обертки. Причина в том, что файлы netCDF имеют специальные ограничения на символы, которые могут
+        использоваться в качестве имен переменных. Однако для удобства мы сохраним метрики, если они были рассчитаны, в отдельном csv-файле.
         """
-        # use name of weight file as part of the result folder name
+        # использовать имя файла весов как часть имени папки с результатами
         weight_file = self._get_weight_file(epoch=epoch)
 
-        # make sure the parent directory exists
+        # убедиться, что родительская директория существует
         parent_directory = self.run_dir / self.period / weight_file.stem
         parent_directory.mkdir(parents=True, exist_ok=True)
 
-        # save metrics any time this function is called, as long as they exist
+        # сохранять метрики в любое время, когда вызывается эта функция, при условии, что они существуют
         if self.cfg.metrics and results is not None:
             metrics_list = self.cfg.metrics
             if isinstance(metrics_list, dict):
@@ -423,10 +423,10 @@ class BaseTester(object):
             LOGGER.info(f"Состояния модели сохранены в {result_file}")
 
     def _evaluate(self, model: BaseModel, loader: DataLoader, frequencies: List[str], save_all_output: bool = False):
-        """Evaluate model"""
+        """Оценка модели"""
         predict_last_n = self.cfg.predict_last_n
         if isinstance(predict_last_n, int):
-            predict_last_n = {frequencies[0]: predict_last_n}  # if predict_last_n is int, there's only one frequency
+            predict_last_n = {frequencies[0]: predict_last_n}  # если predict_last_n - это int, существует только одна частота
 
         preds, obs, dates, all_output = {}, {}, {}, {}
         losses = []
@@ -454,10 +454,10 @@ class BaseTester(object):
 
                 for freq in frequencies:
                     if predict_last_n[freq] == 0:
-                        continue  # no predictions for this frequency
+                        continue  # нет прогнозов для этой частоты
                     freq_key = '' if len(frequencies) == 1 else f'_{freq}'
                     y_hat_sub, y_sub = self._subset_targets(model, data, predictions, predict_last_n[freq], freq_key)
-                    # Date subsetting is universal across all models and thus happens here.
+                    # обрезка дат универсальна для всех моделей и происходит здесь
                     date_sub = data[f'date{freq_key}'][:, -predict_last_n[freq]:]
 
                     if freq not in preds:
@@ -475,11 +475,11 @@ class BaseTester(object):
                 preds[freq] = preds[freq].numpy()
                 obs[freq] = obs[freq].numpy()
 
-        # concatenate all output variables (currently a dict-of-dicts) into a single-level dict
+        # объединить все выходные переменные (в настоящее время dict-of-dicts) в dict одного уровня
         for key, list_of_data in all_output.items():
             all_output[key] = np.concatenate(list_of_data, 0)
 
-        # set to NaN explicitly if all losses are NaN to avoid RuntimeWarning
+        # установить явно NaN, если все потери NaN, чтобы избежать RuntimeWarning
         mean_losses = {}
         if len(losses) == 0:
             mean_losses['loss'] = np.nan
@@ -507,20 +507,20 @@ class BaseTester(object):
 
 
 class RegressionTester(BaseTester):
-    """Tester class to run inference on a regression model.
+    """Класс-тестер для запуска инференса на регрессионной модели.
 
-    Use the `evaluate` method of this class to evaluate a trained model on its train, test, or validation period.
+    Используйте метод `evaluate` этого класса для оценки обученной модели на ее обучающем, тестовом или валидационном периоде.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     run_dir : Path
-        Path to the run directory.
+        Путь к директории запуска.
     period : {'train', 'validation', 'test'}
-        The period to evaluate.
+        Период для оценки.
     init_model : bool, optional
-        If True, the model weights will be initialized with the checkpoint from the last available epoch in `run_dir`.
+        Если True, веса модели будут инициализированы контрольной точкой из последней доступной эпохи в `run_dir`.
     """
 
     def __init__(self, cfg: Config, run_dir: Path, period: str = "test", init_model: bool = True):
@@ -544,20 +544,20 @@ class RegressionTester(BaseTester):
 
 
 class UncertaintyTester(BaseTester):
-    """Tester class to run inference on an uncertainty model.
+    """Класс-тестер для запуска инференса на модели неопределенности.
 
-    Use the `evaluate` method of this class to evaluate a trained model on its train, test, or validation period.
+    Используйте метод `evaluate` этого класса для оценки обученной модели на ее обучающем, тестовом или валидационном периоде.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     run_dir : Path
-        Path to the run directory.
+        Путь к директории запуска.
     period : {'train', 'validation', 'test'}
-        The period to evaluate.
+        Период для оценки.
     init_model : bool, optional
-        If True, the model weights will be initialized with the checkpoint from the last available epoch in `run_dir`.
+        Если True, веса модели будут инициализированы контрольной точкой из последней доступной эпохи в `run_dir`.
     """
 
     def __init__(self, cfg: Config, run_dir: Path, period: str = "test", init_model: bool = True):

@@ -29,12 +29,12 @@ class SnowpackLayer(nn.Module):
 
     def forward(self, precip: torch.Tensor, temp: torch.Tensor) -> torch.Tensor:
         """
-        Parameters
+        Параметры
         ----------
         precip : [batch, seq_len]
         temp   : [batch, seq_len]
 
-        Returns
+        Возвращает
         -------
         melt_seq : [batch, seq_len]  — фактическое таяние на каждом шаге
         """
@@ -67,11 +67,11 @@ class GlobalAttention(nn.Module):
 
     def forward(self, lstm_out: torch.Tensor) -> torch.Tensor:
         """
-        Parameters
+        Параметры
         ----------
         lstm_out : [batch, seq_len, hidden]
 
-        Returns
+        Возвращает
         -------
         context : [batch, hidden]
         """
@@ -111,13 +111,13 @@ class TemporalSelfAttention(nn.Module):
 
     def forward(self, lstm_out: torch.Tensor) -> torch.Tensor:
         """
-        Parameters
+        Параметры
         ----------
         lstm_out : [batch, seq_len, hidden]
 
-        Returns
+        Возвращает
         -------
-        out : [batch, seq_len, hidden]  — временна́я структура сохранена
+        out : [batch, seq_len, hidden]  — временная структура сохранена
         """
         attn_out, _ = self.mha(lstm_out, lstm_out, lstm_out)
         out = self.norm(lstm_out + attn_out)
@@ -142,7 +142,7 @@ class KANBlock(nn.Module):
 
 
 class PIKLAStage(nn.Module):
-    """Один каскад PIKLA: KAN → LSTM → Attention → head.
+    """Один каскад PIKLA: KAN -> LSTM -> Attention -> head.
 
     Используется дважды в RCPIKLA (Stage1=физика, Stage2=residual).
 
@@ -198,12 +198,12 @@ class PIKLAStage(nn.Module):
                 x_raw: Optional[torch.Tensor] = None
                 ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
-        Parameters
+        Параметры
         ----------
         x_kan : [batch, seq_len, input_size]  — нормализованные признаки
         x_raw : [batch, seq_len, n_features]  — сырые данные (нужны для физики)
 
-        Returns
+        Возвращает
         -------
         q     : [batch, seq_len, 1]
         melt  : [batch, seq_len] или None
@@ -246,10 +246,10 @@ class RCPIKLA(BaseModel):
     Реализует полную архитектуру Zhou & Liu (2025):
 
     Stage 1 (физика):
-        KAN → LSTM → GlobalAttn → Q̂₁  (с SnowpackLayer)
+        KAN -> LSTM -> GlobalAttn -> Q̂₁  (с SnowpackLayer)
 
     Stage 2 (residual):
-        KAN → LSTM → GlobalAttn → R̂   (без физики)
+        KAN -> LSTM -> GlobalAttn -> R̂   (без физики)
 
     Q_final = Q̂₁ + R̂   (Eq. 20)
 

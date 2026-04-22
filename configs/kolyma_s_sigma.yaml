@@ -1,0 +1,55 @@
+
+experiment_name: kolyma_s_sigma_analysis
+dataset: generic
+data_dir: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset
+device: cuda:0
+seed: 42
+num_workers: 0
+
+# Пути
+train_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/train_basins.txt
+validation_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/validation_basins.txt
+test_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/test_basins.txt
+
+# Периоды (Обучение на всем прошлом)
+train_start_date: ['01/01/1950']
+train_end_date: ['31/12/2010']
+validation_start_date: ['01/01/2011']
+validation_end_date: ['31/12/2014']
+
+# ТЕСТ (Только лето, чтобы проверять прогноз Q3)
+test_start_date: ['01/07/2020', '01/07/2021', '01/07/2022', '01/07/2023', '01/07/2024', '01/07/2025']
+test_end_date: ['30/09/2020', '30/09/2021', '30/09/2022', '30/09/2023', '30/09/2024', '30/09/2025']
+
+target_variables: ['streamflow']
+dynamic_inputs: 
+  - precipitation
+  - temperature_mean
+  - temperature_min  # Важно для мерзлоты
+  - snowfall
+  - snowmelt
+  - pet_priestley_taylor
+  - month_sin
+  - month_cos
+  - p_rolling_3m
+  - t_rolling_3m
+
+model: cudalstm
+head: regression
+hidden_size: 256
+output_dropout: 0.4
+optimizer: AdamW
+loss: MaskedHybridDiffLoss
+learning_rate: 0.001
+batch_size: 64
+epochs: 40  
+seq_length: 24
+predict_last_n: 3 
+
+metrics:
+  - NSE
+  - RMSE
+  - S/sigma_delta
+
+save_validation_results: True
+log_tensorboard: True

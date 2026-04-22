@@ -8,21 +8,21 @@ import numpy as np
 def percentile_plot(y: np.ndarray,
                     y_hat: np.ndarray,
                     title: str = '') -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-    """Plot the time series of observed values with 3 specific prediction intervals (i.e.: 25 to 75, 10 to 90, 5 to 95).
+    """Построение временного ряда наблюдаемых значений с 3 конкретными доверительными интервалами (т.е.: 25-75, 10-90, 5-95).
 
-    Parameters
+    Параметры
     ----------
     y : np.ndarray
-        Array of observed values.
+        Массив наблюдаемых значений.
     y_hat : np.ndarray
-        Array of simulated values, where the last dimension contains the samples for each time step.
+        Массив симулированных значений, где последний размер содержит выборки для каждого временного шага.
     title : str, optional
-        Title of the plot.
+        Заголовок графика.
 
-    Returns
+    Возвращает
     -------
     Tuple[mpl.figure.Figure, mpl.axes.Axis]
-        The percentile plot.
+        График доверительных интервалов.
     """
     fig, ax = plt.subplots()
 
@@ -50,21 +50,21 @@ def percentile_plot(y: np.ndarray,
 def regression_plot(y: np.ndarray,
                     y_hat: np.ndarray,
                     title: str = '') -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
-    """Plot the time series of observed and simulated values.
+    """Построение временного ряда наблюдаемых и симулированных значений.
 
-    Parameters
+    Параметры
     ----------
     y : np.ndarray
-        Array of observed values.
+        Массив наблюдаемых значений.
     y_hat : np.ndarray
-        Array of simulated values.
+        Массив симулированных значений.
     title : str, optional
-        Title of the plot.
+        Заголовок графика.
 
-    Returns
+    Возвращает
     -------
     Tuple[mpl.figure.Figure, mpl.axes.Axis]
-        The regression plot.
+        График временного ряда наблюдаемых и симулированных значений.
     """
 
     fig, ax = plt.subplots()
@@ -81,40 +81,40 @@ def regression_plot(y: np.ndarray,
 
 
 def uncertainty_plot(y: np.ndarray, y_hat: np.ndarray, title: str = '') -> Tuple[mpl.figure.Figure, np.ndarray]:
-    """Plots probability plot alongside a hydrograph with simulation percentiles.
+    """Построение графика вероятности вместе с гидрографом с доверительными интервалами симуляции.
     
-    The probability plot itself is analogous to the calibration plot for classification tasks. The plot compares the 
-    theoretical percentiles of the estimated conditional distributions (over time) with the respective relative 
-    empirical counts. 
-    The probability plot is often also referred to as probability integral transform diagram, Q-Q plot, or predictive 
-    Q-Q plot. 
+    Сам график вероятности аналогичен калибровочному графику для задач классификации. График сравнивает 
+    теоретические квантили оцененных условных распределений (во времени) с соответствующими относительными 
+    эмпирическими частотами. 
+    График вероятности часто также называют диаграммой преобразования интеграла вероятности, Q-Q диаграммой или предиктивной 
+    Q-Q диаграммой. 
     
 
-    Parameters
+    Параметры
     ----------
     y : np.ndarray
-        Array of observed values.
+        Массив наблюдаемых значений.
     y_hat : np.ndarray
-        Array of simulated values.
+        Массив симулированных значений.
     title : str, optional
-        Title of the plot, by default empty.
+        Заголовок графика.
 
-    Returns
+    Возвращает
     -------
     Tuple[mpl.figure.Figure, np.ndarray]
-        The uncertainty plot.
+        График неопределенности.
     """
 
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(6.5, 3), gridspec_kw={'width_ratios': [4, 5]})
 
-    # only take part of y to have a better zoom-in
+    # берем только часть y, чтобы лучше рассмотреть
     y_long = y[:, -1].flatten()
     y_hat_long = y_hat[:, -1, :].reshape(y_long.shape[0], -1)
     x_bnd = np.arange(0, 400)
     y_bnd_len = len(x_bnd)
 
-    # hydrograph:
-    y_r = [0, 0, 0, 0, 0, 0]  # used later for probability-plot
+    # гидрограф:
+    y_r = [0, 0, 0, 0, 0, 0]  # используется позже для графика вероятности
     quantiles = [0.9, 0.80, 0.50, 0.20, 0.1]
     labels_and_colors = {
         'labels': ['05-95 PI', '10-90 PI', '25-75 PI', '40-60 PI', '45-55 PI'],
@@ -139,7 +139,7 @@ def uncertainty_plot(y: np.ndarray, y_hat: np.ndarray, title: str = '') -> Tuple
     axs[1].legend(prop={'size': 5})
     axs[1].set_ylabel("value")
     axs[1].set_xlabel("time index")
-    # probability-plot:
+    # график вероятности:
     quantiles = np.arange(0, 101, 5)
     y_r = quantiles * 0.0
     for idx in range(len(y_r)):
@@ -154,8 +154,8 @@ def uncertainty_plot(y: np.ndarray, y_hat: np.ndarray, title: str = '') -> Tuple
     axs[0].xaxis.grid(color='#ECECEC', linestyle='dashed')
     axs[0].xaxis.set_ticks(np.arange(0, 1, 0.2))
     axs[0].yaxis.set_ticks(np.arange(0, 1, 0.2))
-    axs[0].set_xlabel("theoretical quantile frequency")
-    axs[0].set_ylabel("count")
+    axs[0].set_xlabel("теоретическая частота квантиля")
+    axs[0].set_ylabel("количество")
 
     fig.suptitle(title, fontsize=14)
     fig.tight_layout(rect=[0, 0.1, 1, 0.95])

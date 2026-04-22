@@ -5,31 +5,31 @@ from neuralprognoz.utils.config import Config
 
 
 def get_tester(cfg: Config, run_dir: Path, period: str, init_model: bool) -> BaseTester:
-    """Get specific tester class objects depending on the model (head) type.
+    """Получить конкретные объекты класса тестера в зависимости от типа модели (головы).
     
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     run_dir : Path
-        Path to the run directory.
+        Путь к директории запуска.
     period : {'train', 'validation', 'test'}
-        The period to evaluate.
+        Период для оценки.
     init_model : bool
-        If True, the model weights will be initialized with the checkpoint from the last available epoch in `run_dir`.
+        Если True, веса модели будут инициализированы контрольной точкой из последней доступной эпохи в `run_dir`.
 
-    Returns
+    Возвращает
     -------
     BaseTester
-        `RegressionTester` if the model head is 'regression'. `UncertaintyTester` if the model head is one of 
-        {'gmm', 'cmal', 'umal'} or if the evaluation is run in MC-Dropout mode.
+        `RegressionTester` если голова модели 'regression'. `UncertaintyTester` если голова модели одна из 
+        {'gmm', 'cmal', 'umal'} или если оценка выполняется в режиме MC-Dropout.
     """
     if cfg.mc_dropout or cfg.head.lower() in ["gmm", "cmal", "umal"]:
         Tester = UncertaintyTester
-    # MC-LSTM is a special case, where the head returns an empty string but the model is trained as regression model.
+    # MC-LSTM — это особый случай, когда голова возвращает пустую строку, но модель обучается как регрессионная модель.
     elif cfg.head.lower() in ["regression", ""]:
         Tester = RegressionTester
     else:
-        NotImplementedError(f"No evaluation method implemented for {cfg.head} head")
+        NotImplementedError(f"Метод оценки для {cfg.head} не реализован")
 
     return Tester(cfg=cfg, run_dir=run_dir, period=period, init_model=init_model)

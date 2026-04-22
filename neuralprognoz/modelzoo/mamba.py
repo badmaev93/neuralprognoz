@@ -14,18 +14,18 @@ from neuralprognoz.utils.config import Config
 
 
 class Mamba(BaseModel):
-    """Mamba model class, which relies on https://github.com/state-spaces/mamba/tree/main.
+    """Класс модели Mamba, основанный на https://github.com/state-spaces/mamba/tree/main.
 
-    This class implements the Mamba SSM with a combined model head, as specified in the config file, and a transition
-    layer to ensure the input dimensions match the mamba_ssm specifications. Please read the mamba
-    documentation to better learn about required hyperparameters.
+    Этот класс реализует Mamba SSM с объединенной головой модели, как указано в файле конфигурации, и переходным
+    слоем для обеспечения соответствия входных размеров спецификациям mamba_ssm. Пожалуйста, прочитайте документацию mamba
+    для лучшего понимания требуемых гиперпараметров.
 
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
     """
-    # specify submodules of the model that can later be used for finetuning. Names must match class attributes
+    # Укажите подмодули модели, которые впоследствии можно использовать для тонкой настройки. Имена должны соответствовать атрибутам класса
     module_parts = ['embedding_net', 'transition_layer', 'mamba', 'head']
 
     def __init__(self, cfg: Config):
@@ -33,12 +33,12 @@ class Mamba(BaseModel):
 
         self.embedding_net = InputLayer(cfg)
 
-        # using a linear layer to move from the emdedded_layer dims to the specified hidden size
+        # использование линейного слоя для перемещения из emdedded_layer dims в указанный скрытый размер
         self.transition_layer = nn.Linear(self.embedding_net.output_size, self.cfg.hidden_size)
 
         if Mamba_SSM is None:
             raise ModuleNotFoundError(
-                f"mamba_ssm, and dependencies, required. Please run: pip install mamba_ssm causal-conv1d>=1.1.0"
+                f"mamba_ssm, и зависимости, требуются. Пожалуйста, выполните: pip install mamba_ssm causal-conv1d>=1.1.0"
             )
         else:
             self.mamba = Mamba_SSM(
@@ -53,30 +53,30 @@ class Mamba(BaseModel):
         self.head = get_head(cfg=cfg, n_in=cfg.hidden_size, n_out=self.output_size)
 
     def forward(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """Perform a forward pass on the CudaLSTM model.
+        """Выполняет прямой проход по модели CudaLSTM.
 
-        Parameters
+        Параметры
         ----------
         data : dict[str, torch.Tensor | dict[str, torch.Tensor]]
-            Dictionary, containing input features as key-value pairs.
+            Словарь, содержащий входные признаки в виде пар ключ-значение.
 
-        Returns
+        Возвращает
         -------
         Dict[str, torch.Tensor]
-            Model outputs and intermediate states as a dictionary.
-                - `y_hat`: model predictions of shape [batch size, sequence length, number of target variables].
-                - `h_n`: hidden state at the last time step of the sequence of shape [batch size, 1, hidden size].
-                - `c_n`: cell state at the last time step of the sequence of shape [batch size, 1, hidden size].
+            Словарь, содержащий выходные данные модели и промежуточные состояния.
+                - `y_hat`: предсказания модели размерностью [batch size, sequence length, number of target variables].
+                - `h_n`: скрытое состояние в последнем временном шаге последовательности размерностью [batch size, 1, hidden size].
+                - `c_n`: состояние ячейки в последнем временном шаге последовательности размерностью [batch size, 1, hidden size].
         """
-        # possibly pass dynamic and static inputs through embedding layers, then concatenate them
+        # возможно, передать динамические и статические входы через embedding слои, затем объединить их
         x_d = self.embedding_net(data)
 
-        # reshaping dimensions to what mamba expects:
+        # изменение размерности в соответствии с требованиями mamba:
         x_d_transition = self.transition_layer(x_d)
 
         mamba_output = self.mamba(x_d_transition)
 
-        # reshape to [batch_size, seq, n_hiddens]
+        # изменение размерности до [batch_size, seq, n_hiddens]
         mamba_output = mamba_output.transpose(0, 1)
 
         pred = {'y_hat': mamba_output}

@@ -5,32 +5,32 @@ from numba import njit
 @njit
 def get_priestley_taylor_pet(t_min: np.ndarray, t_max: np.ndarray, s_rad: np.ndarray, lat: float, elev: float,
                              doy: np.ndarray) -> np.ndarray:
-    """Calculate potential evapotranspiration (PET) as an approximation following the Priestley-Taylor equation.
+    """Рассчитывает потенциальную эвапотранспирацию (PET) по методу Пристли-Тейлора.
 
-    The ground heat flux G is assumed to be 0 at daily time steps (see Newman et al., 2015 [#]_). The 
-    equations follow FAO-56 (Allen et al., 1998 [#]_).
+    Тепловой поток через почву G принимается равным 0 для суточных временных шагов (см. Newman et al., 2015 [#]_). 
+    Уравнения соответствуют FAO-56 (Allen et al., 1998 [#]_).
 
-    Parameters
+    Параметры
     ----------
     t_min : np.ndarray
-        Daily min temperature (degree C)
+        Минимальная суточная температура [°C]
     t_max : np.ndarray
-        Daily max temperature (degree C)
+        Максимальная суточная температура [°C]
     s_rad : np.ndarray
-        Solar radiation (Wm-2)
+        Солнечная радиация [Вт/м²]
     lat : float
-        Latitude in degree
+        Широта [градусы]
     elev : float
-        Elevation in m
+        Высота над уровнем моря [м]
     doy : np.ndarray
-        Day of the year
+        День года [1-366]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Array containing PET estimates in mm/day
+        Массив PET [мм/день]
         
-    References
+    Ссылки
     ----------
     .. [#] A. J. Newman, M. P. Clark, K. Sampson, A. Wood, L. E. Hay, A. Bock, R. J. Viger, D. Blodgett, 
         L. Brekke, J. R. Arnold, T. Hopson, and Q. Duan: Development of a large-sample watershed-scale 
@@ -40,17 +40,17 @@ def get_priestley_taylor_pet(t_min: np.ndarray, t_max: np.ndarray, s_rad: np.nda
     .. [#] Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998). Crop evapotranspiration-Guidelines for computing 
         crop water requirements-FAO Irrigation and drainage paper 56. Fao, Rome, 300(9), D05109.
     """
-    lat = lat * (np.pi / 180)  # degree to rad
+    lat = lat * (np.pi / 180)  # градусы в радианы
 
-    # Slope of saturation vapour pressure curve
+    # Наклон кривой давления насыщенного пара
     t_mean = 0.5 * (t_min + t_max)
     slope_svp = _get_slope_svp_curve(t_mean)
 
-    # incoming netto short-wave radiation
-    s_rad = s_rad * 0.0864  # conversion Wm-2 -> MJm-2day-1
+    # Входящая чистая коротковолновая радиация
+    s_rad = s_rad * 0.0864  # конвертация Вт/м² -> МДж/м²/день
     in_sw_rad = _get_net_sw_srad(s_rad)
 
-    # outgoginng netto long-wave radiation
+    # Исходящая чистая длинноволновая радиация
     sol_dec = _get_sol_decl(doy)
     sha = _get_sunset_hour_angle(lat, sol_dec)
     ird = _get_ird_earth_sun(doy)
@@ -59,19 +59,19 @@ def get_priestley_taylor_pet(t_min: np.ndarray, t_max: np.ndarray, s_rad: np.nda
     a_vp = _get_avp_tmin(t_min)
     out_lw_rad = _get_net_outgoing_lw_rad(t_min, t_max, s_rad, cs_rad, a_vp)
 
-    # net radiation
+    # Чистая радиация
     net_rad = _get_net_rad(in_sw_rad, out_lw_rad)
 
-    # gamma
+    # Психрометрическая константа
     atm_pressure = _get_atmos_pressure(elev)
     gamma = _get_psy_const(atm_pressure)
 
-    # PET MJm-2day-1
-    alpha = 1.26  # Calibrated in CAMELS, here static
-    _lambda = 2.45  # Kept constant, MJkg-1
+    # PET МДж/м²/день
+    alpha = 1.26  # Калиброван в CAMELS, здесь статичен
+    _lambda = 2.45  # Константа, МДж/кг
     pet = (alpha / _lambda) * (slope_svp * net_rad) / (slope_svp + gamma)
 
-    # convert energy to evap
+    # Конверт энергию в эвапотранспирацию
     pet = pet * 0.408
 
     return pet
@@ -92,7 +92,7 @@ def get_priestley_taylor_pet_with_albedo(
     Рассчитывает потенциальную эвапотранспирацию (PET) по методу Пристли-Тейлора 
     с использованием динамического альбедо.
 
-    Parameters
+    Параметры
     ----------
     t_min : np.ndarray
         Минимальная суточная температура [°C]
@@ -111,7 +111,7 @@ def get_priestley_taylor_pet_with_albedo(
     alpha : float, optional
         Коэффициент Пристли-Тейлора. По умолчанию 1.26 (калиброван в CAMELS)
 
-    Returns
+    Возвращает
     -------
     np.ndarray
         Массив PET [мм/день]
@@ -146,7 +146,7 @@ def get_priestley_taylor_pet_with_albedo(
     _lambda = 2.45  # Константа, МДж/кг
     pet = (alpha / _lambda) * (slope_svp * net_rad) / (slope_svp + gamma)
 
-    # Конвертируем энергию в эвапотранспирацию
+    # Конверт энергию в эвапотранспирацию
     pet = pet * 0.408
 
     return pet
@@ -154,19 +154,19 @@ def get_priestley_taylor_pet_with_albedo(
 
 @njit
 def _get_slope_svp_curve(t_mean: np.ndarray) -> np.ndarray:
-    """Slope of saturation vapour pressure curve
+    """Наклон кривой давления насыщенного пара
 
-    Equation 13 FAO-56 Allen et al. (1998) 
+    Уравнение 13 FAO-56 Allen et al. (1998) 
 
-    Parameters
+    Параметры
     ----------
     t_mean : np.ndarray
-        Mean temperature (degree C) 
+        Средняя температура [°C] 
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Slope of the saturation vapor pressure curve in kPa/(degree C)
+        Наклон кривой давления насыщенного пара [кПа/°C]
     """
     delta = 4098 * (0.6108 * np.exp((17.27 * t_mean) / (t_mean + 237.3))) / ((t_mean + 237.3)**2)
     return delta
@@ -174,21 +174,21 @@ def _get_slope_svp_curve(t_mean: np.ndarray) -> np.ndarray:
 
 @njit
 def _get_net_sw_srad(s_rad: np.ndarray, albedo: float = 0.23) -> np.ndarray:
-    """Calculate net shortwave radiation
+    """Расчет чистой коротковолновой радиации
 
-    Equation 38 FAO-56 Allen et al. (1998)
+    Уравнение 38 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     s_rad : np.ndarray
-        Incoming solar radiation (MJm-2day-1)
+        Входящая солнечная радиация [МДж/м²/день]
     albedo : float, optional
-        Albedo, by default 0.23
+        Альбедо, по умолчанию 0.23
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Net shortwave radiation (MJm-2day-1)
+        Чистая коротковолновая радиация [МДж/м²/день]
     """
     net_srad = (1 - albedo) * s_rad
     return net_srad
@@ -196,42 +196,42 @@ def _get_net_sw_srad(s_rad: np.ndarray, albedo: float = 0.23) -> np.ndarray:
 
 @njit
 def _get_sol_decl(doy: np.ndarray) -> np.ndarray:
-    """Get solar declination
+    """Определение солнечного склонения
 
-    Equation 24 FAO-56 Allen et al. (1998)
+    Уравнение 24 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     doy : np.ndarray
-        Day of the year
+        День года [1-366]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Solar declination in rad
+        Солнечное склонение [радианы]
     """
-    # equation 24 FAO Allen
+    # уравнение 24 FAO Allen
     sol_dec = 0.409 * np.sin((2 * np.pi) / 365 * doy - 1.39)
     return sol_dec
 
 
 @njit
 def _get_sunset_hour_angle(lat: float, sol_dec: np.ndarray) -> np.ndarray:
-    """Sunset hour angle
+    """Угол сумерек
 
 
 
-    Parameters
+    Параметры
     ----------
     lat : float
-        Latitude in rad
+        Широта в радианах
     sol_dec : np.ndarray
-        Solar declination in rad
+        Солнечное склонение в радианах
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Sunset hour angle in rad
+        Угол сумерек в радианах
     """
     term = -np.tan(lat) * np.tan(sol_dec)
     term[term < -1] = -1
@@ -242,19 +242,19 @@ def _get_sunset_hour_angle(lat: float, sol_dec: np.ndarray) -> np.ndarray:
 
 @njit
 def _get_ird_earth_sun(doy: np.ndarray) -> np.ndarray:
-    """Inverse relative distance between Earth and Sun
+    """Обратное относительное расстояние между Землей и Солнцем
 
-    Equation 23 FAO-56 Allen et al. (1998)
+    Уравнение 23 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     doy : np.ndarray
-        Day of the year
+        День года [1-366]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Inverse relative distance between Earth and Sun
+        Обратное относительное расстояние между Землей и Солнцем
     """
     ird = 1 + 0.033 * np.cos((2 * np.pi) / 365 * doy)
     return ird
@@ -262,25 +262,25 @@ def _get_ird_earth_sun(doy: np.ndarray) -> np.ndarray:
 
 @njit
 def _get_extraterra_rad(lat: float, sol_dec: np.ndarray, sha: np.ndarray, ird: np.ndarray) -> np.ndarray:
-    """Extraterrestrial Radiation
+    """Внеземная радиация
 
-    Equation 21 FAO-56 Allen et al. (1998)
+    Уравнение 21 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     lat : float
-        Lat in rad (pos for northern hemisphere)
+        Широта в радианах
     sol_dec : np.ndarray
-        Solar declination in rad
+        Солнечное склонение в радианах
     sha : np.ndarray
-        Sunset hour angle in rad
+        Угол сумерек в радианах
     ird : np.ndarray
-        Inverse relative distance of Earth and Sun
+        Обратное относительное расстояние между Землей и Солнцем
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Extraterrestrial radiation MJm-2day-1
+        Внеземная радиация [МДж/м²/день]
     """
     term1 = (24 * 60) / np.pi * 0.082 * ird
     term2 = sha * np.sin(lat) * np.sin(sol_dec) + np.cos(lat) * np.cos(sol_dec) * np.sin(sha)
@@ -290,21 +290,21 @@ def _get_extraterra_rad(lat: float, sol_dec: np.ndarray, sha: np.ndarray, ird: n
 
 @njit
 def _get_clear_sky_rad(elev: float, et_rad: np.ndarray) -> np.ndarray:
-    """Clear sky radiation
+    """Радиация ясного неба
 
-    Equation 37 FAO-56 Allen et al. (1998)
+    Уравнение 37 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     elev : float
-        Elevation in m
+        Высота над уровнем моря [м]
     et_rad : np.ndarray
-        Extraterrestrial radiation in MJm-2day-1
+        Внеземная радиация [МДж/м²/день]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Clear sky radiation MJm-2day-1
+        Радиация ясного неба [МДж/м²/день]
     """
     cs_rad = (0.75 + 2 * 10e-5 * elev) * et_rad
     return cs_rad
@@ -312,19 +312,19 @@ def _get_clear_sky_rad(elev: float, et_rad: np.ndarray) -> np.ndarray:
 
 @njit
 def _get_avp_tmin(t_min: np.ndarray) -> np.ndarray:
-    """Actual vapor pressure estimated using min temperature
+    """Фактическое давление пара, оцененное с использованием минимальной температуры
 
-    Equation 48 FAO-56 Allen et al. (1998)
+    Уравнение 48 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     t_min : np.ndarray
-        Minimum temperature in degree C
+        Минимальная температура [°C]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Actual vapor pressure kPa
+        Фактическое давление пара [кПа]
     """
     avp = 0.611 * np.exp((17.27 * t_min) / (t_min + 237.3))
     return avp
@@ -333,31 +333,31 @@ def _get_avp_tmin(t_min: np.ndarray) -> np.ndarray:
 @njit
 def _get_net_outgoing_lw_rad(t_min: np.ndarray, t_max: np.ndarray, s_rad: np.ndarray, cs_rad: np.ndarray,
                              a_vp: np.ndarray) -> np.ndarray:
-    """Net outgoing longwave radiation
+    """Чистая исходящая длинноволновая радиация
 
-    Expects temperatures in degree and does the conversion in kelvin in the function.
+    Температура ожидается в градусах и конвертируется в кельвины в функции.
 
-    Equation 49 FAO-56 Allen et al. (1998)
+    Уравнение 49 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     t_min : np.ndarray
-        Min temperature in degree C
+        Минимальная температура [°C]
     t_max : np.ndarray
-        Max temperature in degree C
+        Максимальная температура [°C]
     s_rad : np.ndarray
-        Measured or modeled solar radiation MJm-2day-1
+        Измеренная или смоделированная солнечная радиация [МДж/м²/день]
     cs_rad : np.ndarray
-        Clear sky radiation MJm-2day-1
+        Радиация ясного неба [МДж/м²/день]
     a_vp : np.ndarray
-        Actuatal vapor pressure kPa
+        Фактическое давление пара [кПа]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
-        Net outgoing longwave radiation MJm-2day-1
+        Чистая исходящая длинноволновая радиация [МДж/м²/день]
     """
-    term1 = ((t_max + 273.16)**4 + (t_min + 273.16)**4) / 2  # conversion in K in equation
+    term1 = ((t_max + 273.16)**4 + (t_min + 273.16)**4) / 2  # конвертация в K в уравнении
     term2 = 0.34 - 0.14 * np.sqrt(a_vp)
     term3 = 1.35 * s_rad / cs_rad - 0.35
     stefan_boltzman = 4.903e-09
@@ -367,18 +367,18 @@ def _get_net_outgoing_lw_rad(t_min: np.ndarray, t_max: np.ndarray, s_rad: np.nda
 
 @njit
 def _get_net_rad(sw_rad: np.ndarray, lw_rad: np.ndarray) -> np.ndarray:
-    """Net radiation
+    """Чистая радиация
 
-    Equation 40 FAO-56 Allen et al. (1998)
+    Уравнение 40 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     sw_rad : np.ndarray
-        Net incoming shortwave radiation MJm-2day-1
+        Чистая входящая коротковолновая радиация [МДж/м²/день]
     lw_rad : np.ndarray
-        Net outgoing longwave radiation MJm-2day-1
+        Чистая исходящая длинноволновая радиация [МДж/м²/день]
 
-    Returns
+    Возвращает
     -------
     np.ndarray
         [description]
@@ -388,19 +388,19 @@ def _get_net_rad(sw_rad: np.ndarray, lw_rad: np.ndarray) -> np.ndarray:
 
 @njit
 def _get_atmos_pressure(elev: float) -> float:
-    """Atmospheric pressure
+    """Атмосферное давление
 
-    Equation 7 FAO-56 Allen et al. (1998)
+    Уравнение 7 FAO-56 Allen et al. (1998)
 
-    Parameters
+    Параметры
     ----------
     elev : float
-        Elevation in m
+        Высота над уровнем моря [м]
 
-    Returns
+    Возвращает
     -------
     float
-        Atmospheric pressure in kPa 
+        Атмосферное давление [кПа]
     """
     temp = (293.0 - 0.0065 * elev) / 293.0
     return np.power(temp, 5.26) * 101.3
@@ -408,25 +408,25 @@ def _get_atmos_pressure(elev: float) -> float:
 
 @njit
 def _get_psy_const(atm_pressure: float) -> float:
-    """Psychometric constant
+    """Психрометрическая постоянная
 
-    Parameters
+    Параметры
     ----------
     atm_pressure : float
-        Atmospheric pressure in kPa
+        Атмосферное давление [кПа]
 
-    Returns
+    Возвращает
     -------
     float
-        Psychometric constant in kPa/(degree C)
+        Психрометрическая постоянная [кПа/(градус C)]
     """
     return 0.000665 * atm_pressure
 
 
 @njit
 def _srad_from_t(et_rad, cs_rad, t_min, t_max, coastal=False):
-    """Estimate solar radiation from temperature"""
-    # equation 50
+    """Оценка солнечной радиации по температуре"""
+    # уравнение 50
     if coastal:
         adj = 0.19
     else:

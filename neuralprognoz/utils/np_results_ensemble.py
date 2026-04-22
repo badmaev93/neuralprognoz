@@ -1,4 +1,4 @@
-"""Скрипт для осреднения прогнозов нескольких запусков. """
+"""Скрипт для осреднения прогнозов нескольких запусков """
 import argparse
 import pickle
 import sys
@@ -87,14 +87,12 @@ def _create_ensemble(results_files: List[Path], frequencies: List[str], config: 
             for freq in frequencies:
                 freq_results = basin_results[freq]['xr']
 
-                # Суммирует прогнозы по всем бассейнам
                 if freq not in ensemble_sum[basin]:
                     ensemble_sum[basin][freq] = freq_results
                 else:
                     for target_var in target_vars:
                         ensemble_sum[basin][freq][f'{target_var}_sim'] += freq_results[f'{target_var}_sim']
 
-    # Разделить сумму прогнозов на количество запусков, чтобы получить среднее прогнозное значение для каждого бассейна и частоты
     print('Объединие результатов и рассчет метрик.')
     ensemble = defaultdict(lambda: defaultdict(dict))
     for basin in tqdm(ensemble_sum.keys()):
@@ -102,7 +100,6 @@ def _create_ensemble(results_files: List[Path], frequencies: List[str], config: 
             ensemble_xr = ensemble_sum[basin][freq]
 
             # объединить дату и время в единый индекс для расчёта метрик
-            # создать диапазон дат-времени на текущей частоте, удаляя временные шаги, которые не прогнозируются
             frequency_factor = int(get_frequency_factor(lowest_freq, freq))
             # убедиться, что последний день полностью входит в указанный диапазон.
             freq_date_range = pd.date_range(start=ensemble_xr.coords['date'].values[0],
@@ -118,7 +115,6 @@ def _create_ensemble(results_files: List[Path], frequencies: List[str], config: 
                 .drop_vars({'datetime', 'date', 'time_step'})
             ensemble_xr['datetime'] = freq_date_range
             for target_var in target_vars:
-                # средний прогноз
                 ensemble_xr[f'{target_var}_sim'] = ensemble_xr[f'{target_var}_sim'] / len(results_files)
 
                 # обрезать прогнозы до нуля.
@@ -126,7 +122,6 @@ def _create_ensemble(results_files: List[Path], frequencies: List[str], config: 
                 if target_var in config.clip_targets_to_zero:
                     sim = xr.where(sim < 0, 0, sim)
 
-                # рассчет метрик
                 metrics = config.metrics if isinstance(config.metrics, list) else config.metrics[target_var]
                 if 'all' in metrics:
                     metrics = get_available_metrics()
@@ -143,10 +138,8 @@ def _create_ensemble(results_files: List[Path], frequencies: List[str], config: 
                     print(msg)
                     ensemble_metrics = {metric: np.nan for metric in metrics}
 
-                # добавить идентификатор переменной к метрикам, если нужно
                 if len(target_vars) > 1:
                     ensemble_metrics = {f'{target_var}_{key}': val for key, val in ensemble_metrics.items()}
-                # добавить идентификатор частоты к метрикам, если нужно
                 if len(frequencies) > 1:
                     ensemble_metrics = {f'{key}_{freq}': val for key, val in ensemble_metrics.items()}
                 for metric, val in ensemble_metrics.items():

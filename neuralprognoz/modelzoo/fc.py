@@ -6,36 +6,36 @@ import torch.nn as nn
 
 
 class FC(nn.Module):
-    """Auxiliary class to build (multi-layer) fully-connected networks.
+    """Вспомогательный класс для построения (многослойных) fully-connected сетей.
 
-    This class is used to build fully-connected embedding networks for static and/or dynamic input data.
-    Use the config argument `statics/dynamics_embedding` to specify the architecture of the embedding network. See the
-    `InputLayer` class on how to specify the exact embedding architecture.
+    Этот класс используется для построения fully-connected embedding сетей для статических и/или динамических входных данных.
+    Используйте аргумент конфигурации `statics/dynamics_embedding`, чтобы указать архитектуру embedding сети. См. класс
+    `InputLayer`, чтобы узнать, как указать точную архитектуру embedding.
 
-    Parameters
+    Параметры
     ----------
     input_size : int
-        Number of input features.
+        Количество входных признаков.
     hidden_sizes : List[int]
-        Size of the hidden and output layers.
+        Размер скрытых и выходных слоев.
     activation : str, optional
-        Activation function for intermediate layers, default tanh.
+        Функция активации для промежуточных слоев, по умолчанию tanh.
     dropout : float, optional
-        Dropout rate in intermediate layers.
+        Dropout rate в промежуточных слоях.
     """
 
     def __init__(self, input_size: int, hidden_sizes: List[int], activation: str = 'tanh', dropout: float = 0.0):
         super(FC, self).__init__()
 
         if len(hidden_sizes) == 0:
-            raise ValueError('hidden_sizes must at least have one entry to create a fully-connected net.')
+            raise ValueError('hidden_sizes должен содержать хотя бы один элемент для создания fully-connected сети.')
 
         self.output_size = hidden_sizes[-1]
         hidden_sizes = hidden_sizes[:-1]
 
         activation = self._get_activation(activation)
 
-        # create network
+        # создать сеть
         layers = []
         if hidden_sizes:
             for i, hidden_size in enumerate(hidden_sizes):
@@ -64,11 +64,11 @@ class FC(nn.Module):
         elif name.lower() == "linear":
             activation = nn.Identity()
         else:
-            raise NotImplementedError(f"{name} currently not supported as activation in this class")
+            raise NotImplementedError(f"{name} в настоящее время не поддерживается в качестве функции активации в этом классе")
         return activation
 
     def _reset_parameters(self):
-        """Special initialization of certain model weights."""
+        """Специальная инициализация определенных весов модели."""
         for layer in self.net:
             if isinstance(layer, nn.modules.linear.Linear):
                 n_in = layer.weight.shape[1]
@@ -77,16 +77,16 @@ class FC(nn.Module):
                 nn.init.constant_(layer.bias, val=0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform a forward pass on the FC model.
+        """Выполнить прямой проход модели FC.
 
-        Parameters
+        Параметры
         ----------
         x : torch.Tensor
-            Input data of shape [any, any, input size]
+            Входные данные формы [any, any, input size]
 
-        Returns
+        Возвращает
         -------
         torch.Tensor
-            Embedded inputs of shape [any, any, output_size], where 'output_size' is the size of the last network layer.
+            Векторы признаков формы [any, any, output_size], где 'output_size' - это размер последнего слоя сети.
         """
         return self.net(x)

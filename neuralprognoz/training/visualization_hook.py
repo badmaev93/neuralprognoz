@@ -22,9 +22,7 @@ def create_validation_plots(results_dict: dict, epoch: int, img_log_dir: Path, b
         
         freq_key = list(results_dict[basin_id].keys())[0]
         ds = results_dict[basin_id][freq_key]['xr']
-        
-        # --- FIX: Безопасное извлечение данных ---
-        
+                
         # 1. Данные для графика (День 1)
         if 'time_step' in ds.dims:
             ds_day1 = ds.isel(time_step=0)
@@ -58,7 +56,6 @@ def create_validation_plots(results_dict: dict, epoch: int, img_log_dir: Path, b
         obs_raw = ds['streamflow_obs'].values
         sim_raw = ds['streamflow_sim'].values
         
-        # FIX: Принудительное сплющивание Obs (если он пришел как [N, 1] или [N, 4])
         # Для корректности берем только первый столбец, если он многомерный, так как obs везде одинаковый
         if obs_raw.ndim > 1:
             obs_raw = obs_raw[:, 0]

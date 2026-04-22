@@ -1,0 +1,79 @@
+
+experiment_name: kolyma_q3_forecast
+dataset: generic
+data_dir: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset
+device: cuda:0
+seed: 42
+num_workers: 0
+
+train_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/train_basins.txt
+validation_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/validation_basins.txt
+test_basin_file: /content/drive/MyDrive/neuralprognoz_project/data/generic_dataset/basin_lists/test_basins.txt
+
+train_start_date: ['01/01/1950']
+train_end_date: ['31/12/2015']
+
+validation_start_date: ['01/01/2016']
+validation_end_date: ['31/12/2019']
+
+test_start_date: 
+  - '01/05/2020'
+  - '01/05/2021'
+  - '01/05/2022'
+  - '01/05/2023'
+  - '01/05/2024'
+test_end_date: 
+  - '30/09/2020'
+  - '30/09/2021'
+  - '30/09/2022'
+  - '30/09/2023'
+  - '30/09/2024'
+
+target_variables: ['streamflow']
+dynamic_inputs: 
+  - precipitation
+  - temperature_mean
+  - temperature_min
+  - temperature_max
+  - snowfall
+  - snowmelt
+  - snow_fraction
+  - pet_priestley_taylor
+  - month_sin
+  - month_cos
+  - p_rolling_3m
+  - t_rolling_3m
+  - aridity_index
+
+model: cudalstm
+head: regression
+hidden_size: 256
+initial_forget_bias: 3
+output_dropout: 0.4
+
+optimizer: AdamW
+loss: MaskedHybridDiffLoss
+learning_rate: 0.001
+batch_size: 64
+epochs: 50
+clip_gradient_norm: 1.0
+seq_length: 24
+predict_last_n: 3        
+
+dynamic_learning_rate: True
+patience_dynamic_learning_rate: 5
+factor_dynamic_learning_rate: 0.5
+
+metrics:
+  - NSE
+  - KGE
+  - RMSE
+  - S/sigma_delta   
+
+validate_every: 1
+save_validation_results: True
+save_weights_every: 1
+early_stopping: True
+patience_early_stopping: 10
+minimum_epochs_before_early_stopping: 10
+log_tensorboard: True

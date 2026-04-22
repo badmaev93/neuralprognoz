@@ -43,24 +43,24 @@ AUTOREGRESSIVE_MODELS = ['arlstm']
 def get_model(cfg: Config) -> nn.Module:
     """Get model object, depending on the run configuration.
     
-    Parameters
+    Параметры
     ----------
     cfg : Config
-        The run configuration.
+        Конфигурация запуска.
 
-    Returns
+    Возвращает
     -------
     nn.Module
-        A new model instance of the type specified in the config.
+        Новый экземпляр модели, указанный в конфигурации.
     """
     if cfg.model.lower() in SINGLE_FREQ_MODELS and len(cfg.use_frequencies) > 1:
-        raise ValueError(f"Model {cfg.model} does not support multiple frequencies.")
+        raise ValueError(f"Модель {cfg.model} не поддерживает множественные частоты.")
 
     if cfg.model.lower() not in AUTOREGRESSIVE_MODELS and cfg.autoregressive_inputs:
-        raise ValueError(f"Model {cfg.model} does not support autoregression.")
+        raise ValueError(f"Модель {cfg.model} не поддерживает авторегрессию.")
 
     if cfg.model.lower() != "mclstm" and cfg.mass_inputs:
-        raise ValueError(f"The use of 'mass_inputs' with {cfg.model} is not supported.")
+        raise ValueError(f"Использование 'mass_inputs' с моделью {cfg.model} не поддерживается.")
 
     if cfg.model.lower() == "arlstm":
         model = ARLSTM(cfg=cfg)
@@ -72,7 +72,7 @@ def get_model(cfg: Config) -> nn.Module:
         model = CustomLSTM(cfg=cfg)
     elif cfg.model.lower() == "lstm":
         warnings.warn(
-            "The `LSTM` class has been renamed to `CustomLSTM`. Support for `LSTM` will we dropped in the future.",
+            "Класс `LSTM` был переименован в `CustomLSTM`. Поддержка `LSTM` будет прекращена в будущем.",
             FutureWarning)
         model = CustomLSTM(cfg=cfg)
     elif cfg.model.lower() == "gru":
@@ -104,6 +104,6 @@ def get_model(cfg: Config) -> nn.Module:
     elif cfg.model.lower() == "rcpikla":
         model = RCPIKLA(cfg=cfg)
     else:
-        raise NotImplementedError(f"{cfg.model} not implemented or not linked in `get_model()`")
+        raise NotImplementedError(f"{cfg.model} не реализована или не связана в `get_model()`")
 
     return model
