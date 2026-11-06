@@ -221,7 +221,7 @@ class BaseTester(object):
                 if self.cfg.cache_validation_data and self.period == "validation":
                     self.cached_datasets[basin] = ds
 
-            loader = DataLoader(ds, batch_size=self.cfg.batch_size, num_workers=0, collate_fn=ds.collate_fn)
+            loader = DataLoader(ds, batch_size=self.cfg.batch_size, num_workers=0, pin_memory=self.device.type != "cpu", collate_fn=ds.collate_fn)
 
             y_hat, y, dates, all_losses, all_output[basin] = self._evaluate(model, loader, ds.frequencies,
                                                                             save_all_output)
@@ -435,9 +435,9 @@ class BaseTester(object):
 
                 for key in data:
                     if key.startswith('x_d'):
-                        data[key] = {k: v.to(self.device) for k, v in data[key].items()}
+                        data[key] = {k: v.to(self.device, non_blocking=True) for k, v in data[key].items()}
                     elif not key.startswith('date'):
-                        data[key] = data[key].to(self.device)
+                        data[key] = data[key].to(self.device, non_blocking=True)
                 data = model.pre_model_hook(data, is_train=False)
                 predictions, loss = self._get_predictions_and_loss(model, data)
 
