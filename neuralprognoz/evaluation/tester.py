@@ -140,7 +140,7 @@ class BaseTester(object):
         weight_file = self._get_weight_file(epoch)
 
         LOGGER.info(f"Используются веса модели из {weight_file}")
-        self.model.load_state_dict(torch.load(weight_file, map_location=self.device))
+        self.model.load_state_dict(torch.load(weight_file, map_location=self.device, weights_only=True))
 
     def _get_dataset(self, basin: str) -> BaseDataset:
         """Получение датасета для одного бассейна."""
