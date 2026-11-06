@@ -162,12 +162,12 @@ class BaseTrainer(object):
         self.model = self._get_model().to(self.device)
         if self.cfg.checkpoint_path is not None:
             LOGGER.info(f"Запуск обучения с точки сохранения. {self.cfg.checkpoint_path}")
-            self.model.load_state_dict(torch.load(str(self.cfg.checkpoint_path), map_location=self.device))
+            self.model.load_state_dict(torch.load(str(self.cfg.checkpoint_path), map_location=self.device, weights_only=True))
         elif self.cfg.checkpoint_path is None and self.cfg.is_finetuning:
             # по умолчанию для точной настройки используется последнее состояние модели
             checkpoint_path = [x for x in sorted(list(self.cfg.base_run_dir.glob('model_epoch*.pt')))][-1]
             LOGGER.info(f"Запуск обучения с чекпоинта {checkpoint_path}")
-            self.model.load_state_dict(torch.load(str(checkpoint_path), map_location=self.device))
+            self.model.load_state_dict(torch.load(str(checkpoint_path), map_location=self.device, weights_only=True))
 
         # Заморозмить детали модели из предобученной модели.
         if self.cfg.is_finetuning:
@@ -304,7 +304,7 @@ class BaseTrainer(object):
                             best_weights_path = self.cfg.run_dir / f"model_epoch{best_epoch:03d}.pt"
                             if best_weights_path.exists():
                                 LOGGER.info(f"Загрузка весов лучшей модели с эпохи {best_epoch}")
-                                weight_file = torch.load(best_weights_path, map_location=self.device)
+                                weight_file = torch.load(best_weights_path, map_location=self.device, weights_only=True)
 
                                 # Проверяем формат файла (словарь или чистые веса)
                                 if isinstance(weight_file, dict) and 'model_state_dict' in weight_file:
@@ -368,8 +368,8 @@ class BaseTrainer(object):
         optimizer_path = self.cfg.base_run_dir / f"optimizer_state_epoch{epoch}.pt"
 
         LOGGER.info(f"Продолжение обучения с эпохи {int(epoch)}")
-        self.model.load_state_dict(torch.load(weight_path, map_location=self.device))
-        self.optimizer.load_state_dict(torch.load(str(optimizer_path), map_location=self.device))
+        self.model.load_state_dict(torch.load(weight_path, map_location=self.device, weights_only=True))
+        self.optimizer.load_state_dict(torch.load(str(optimizer_path), map_location=self.device, weights_only=True))
 
     def _save_weights_and_optimizer(self, epoch: int):
         weight_path = self.cfg.run_dir / f"model_epoch{epoch:03d}.pt"
