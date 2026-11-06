@@ -603,7 +603,8 @@ class SummerWeightedPhysicsLoss(BaseLoss):
                 T = y.shape[1]
                 if dates_np.ndim == 2 and dates_np.shape[1] >= T:
                     dates_np = dates_np[:, -T:]
-                months = np.vectorize(lambda d: pd.to_datetime(d).month)(dates_np)
+                # Optimized: pd.DatetimeIndex vectorizes parsing and extraction, avoiding python lambda overhead (np.vectorize is essentially a loop).
+                months = pd.DatetimeIndex(dates_np.ravel()).month.values.reshape(dates_np.shape)
                 summer_mask_np = np.isin(months, list(self._summer_months))
                 summer_mask = torch.from_numpy(summer_mask_np).unsqueeze(-1).to(y.device)
                 combined = mask & summer_mask
@@ -693,7 +694,8 @@ class JulyWeightedPhysicsLoss(BaseLoss):
                 T = y.shape[1]
                 if dates_np.ndim == 2 and dates_np.shape[1] >= T:
                     dates_np = dates_np[:, -T:]
-                months = np.vectorize(lambda d: pd.to_datetime(d).month)(dates_np)
+                # Optimized: pd.DatetimeIndex vectorizes parsing and extraction, avoiding python lambda overhead (np.vectorize is essentially a loop).
+                months = pd.DatetimeIndex(dates_np.ravel()).month.values.reshape(dates_np.shape)
                 summer_mask_np = np.isin(months, list(self._summer_months))
                 summer_mask = torch.from_numpy(summer_mask_np).unsqueeze(-1).to(y.device)
                 combined = mask & summer_mask
