@@ -5,3 +5,7 @@
 ## 2026-11-06 - Date parsing in custom loss functions
 **Learning:** In PyTorch models that incorporate custom time-aware physical loss functions (like `SummerWeightedPhysicsLoss` and `JulyWeightedPhysicsLoss`), dynamically extracting the month from a batch of dates on each forward pass using `np.vectorize(lambda d: pd.to_datetime(d).month)` causes a massive CPU bottleneck because it iterates through the elements calling the Python lambda function rather than using true vectorization.
 **Action:** Replace `np.vectorize` with `pd.DatetimeIndex(dates_np.ravel()).month.values.reshape(dates_np.shape)` which performs true vectorized datetime parsing and extraction, running approximately 600x faster and eliminating the CPU bottleneck in the loss calculation.
+
+## 2026-11-06 - PyTorch Training Loop Optimization
+**Learning:** PyTorch DataLoader defaults to `persistent_workers=False` and `torch.backends.cudnn.benchmark=False`. When `num_workers > 0`, `persistent_workers=False` destroys and recreates background workers at the end of each epoch, which is a major overhead in the PyTorch training loop. The cuDNN auto-tuner is also disabled by default, although it can find the fastest convolution/RNN algorithm for a given input size, offering a free speedup when input sizes don't change.
+**Action:** Set `persistent_workers=True` in `DataLoader` when `num_workers > 0` to reuse background worker processes. Set `torch.backends.cudnn.benchmark = True` when the device is `cuda` to enable the cuDNN auto-tuner.

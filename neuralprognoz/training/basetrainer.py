@@ -108,7 +108,8 @@ class BaseTrainer(object):
                           shuffle=True,
                           num_workers=self.cfg.num_workers,
                           pin_memory=self.device.type != "cpu",
-                          collate_fn=ds.collate_fn)
+                          collate_fn=ds.collate_fn,
+                          persistent_workers=self.cfg.num_workers > 0)
 
     def _freeze_model_parts(self):
         # заморозка всех весов модели
@@ -437,6 +438,7 @@ class BaseTrainer(object):
             pbar.set_postfix_str(f"Loss: {loss.item():.4f}")
 
             self.experiment_logger.log_step(**{k: v.item() for k, v in all_losses.items()})
+
     def _set_random_seeds(self):
         if self.cfg.seed is None:
             self.cfg.seed = int(np.random.uniform(low=0, high=1e6))
@@ -455,6 +457,7 @@ class BaseTrainer(object):
                     raise RuntimeError(f"Не обнаружено GPU #{gpu_id} ")
                 else:
                     self.device = torch.device(self.cfg.device)
+                    torch.backends.cudnn.benchmark = True
             elif self.cfg.device == "mps":
                 if torch.backends.mps.is_available():
                     self.device = torch.device("mps")
@@ -465,6 +468,7 @@ class BaseTrainer(object):
         else:
             if torch.cuda.is_available():
                 self.device = torch.device("cuda:0")
+                torch.backends.cudnn.benchmark = True
             elif torch.backends.mps.is_available():
                 self.device = torch.device("mps")
             else:
