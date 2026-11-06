@@ -107,6 +107,7 @@ class BaseTrainer(object):
                           batch_size=self.cfg.batch_size,
                           shuffle=True,
                           num_workers=self.cfg.num_workers,
+                          pin_memory=self.device.type != "cpu",
                           collate_fn=ds.collate_fn)
 
     def _freeze_model_parts(self):
@@ -394,9 +395,9 @@ class BaseTrainer(object):
 
             for key in data.keys():
                 if key.startswith('x_d'):
-                    data[key] = {k: v.to(self.device) for k, v in data[key].items()}
+                    data[key] = {k: v.to(self.device, non_blocking=True) for k, v in data[key].items()}
                 elif not key.startswith('date'):
-                    data[key] = data[key].to(self.device)
+                    data[key] = data[key].to(self.device, non_blocking=True)
 
             # применить возможную предобработку к батчу перед прямым проходом
             data = self.model.pre_model_hook(data, is_train=True)
@@ -408,7 +409,7 @@ class BaseTrainer(object):
                 for key in filter(lambda k: 'y' in k, data.keys()):
                     noise = self.noise_sampler_y.sample(data[key].shape)
                     # убедиться что добавлен шум близкий к нулю к изначально близким к нулю целям
-                    data[key] += (data[key] + self._target_mean / self._target_std) * noise.to(self.device)
+                    data[key] += (data[key] + self._target_mean / self._target_std) * noise.to(self.device, non_blocking=True)
 
             loss, all_losses = self.loss_obj(predictions, data)
 
@@ -422,7 +423,7 @@ class BaseTrainer(object):
                 nan_count = 0
 
                 # удаление старых градиентов
-                self.optimizer.zero_grad()
+                self.optimizer.zero_grad(set_to_none=True)
 
                 # получить градиенты
                 loss.backward()
