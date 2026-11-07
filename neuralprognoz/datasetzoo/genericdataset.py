@@ -9,7 +9,6 @@ import xarray
 from neuralprognoz.datasetzoo.basedataset import BaseDataset
 from neuralprognoz.utils.config import Config
 
-
 class GenericDataset(BaseDataset):
     """Класс набора данных для универсального набора данных, который читает данные для любого региона на основе общих соглашений о структуре файлов.
 
@@ -75,7 +74,6 @@ class GenericDataset(BaseDataset):
     def _load_attributes(self) -> pd.DataFrame:
         """Загрузить статические атрибуты водосбора."""
         return load_attributes(self.cfg.data_dir, basins=self.basins)
-
 
 def load_attributes(data_dir: Path, basins: List[str] = None) -> pd.DataFrame:
     """Загрузить статические атрибуты.
@@ -151,64 +149,23 @@ def load_attributes(data_dir: Path, basins: List[str] = None) -> pd.DataFrame:
 
     return df
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def load_timeseries(data_dir: Path, basin: str) -> pd.DataFrame:
-    netcdf_file = list(data_dir.glob(f"**/{basin}.nc"))
-    if len(netcdf_file) == 0:
-        raise FileNotFoundError(f"No NetCDF file found for basin {basin} in {data_dir}")
+    # ⚡ Bolt: Lazily evaluate glob using `next()` to stop searching once the file is found.
+    # This avoids the O(N) overhead of casting the entire recursive search tree to a list
+    # while maintaining the structural flexibility of searching across subdirectories.
+    netcdf_file = next(data_dir.glob(f"**/{basin}.nc"), None)
+    if netcdf_file is None:
+        netcdf_file = next(data_dir.glob(f"**/{basin}.nc4"), None)
+        if netcdf_file is None:
+            raise FileNotFoundError(f"No NetCDF file found for basin {basin} in {data_dir}")
+
     xr_ds = None
     try:
-        with xarray.open_dataset(netcdf_file[0], decode_timedelta=False, engine="h5netcdf") as ds_temp:
+        with xarray.open_dataset(netcdf_file, decode_timedelta=False, engine="h5netcdf") as ds_temp:
             xr_ds = ds_temp.load()
     except Exception as e1:
         try:
-            with xarray.open_dataset(netcdf_file[0], decode_timedelta=False) as ds_temp:
+            with xarray.open_dataset(netcdf_file, decode_timedelta=False) as ds_temp:
                 xr_ds = ds_temp.load()
         except Exception as e2:
             raise RuntimeError(f"Failed to load {basin}.nc. Errors: {e1}, {e2}")
@@ -221,4 +178,3 @@ def load_timeseries(data_dir: Path, basin: str) -> pd.DataFrame:
         elif "time" in df.index.names:
             df = df.reset_index(level=[n for n in df.index.names if n != "time"], drop=True)
     return df
-
