@@ -13,3 +13,6 @@
 ## 2024-05-18 - pathlib.Path.glob evaluation optimization
 **Learning:** In `GenericDataset` loading time series data, using `list(data_dir.glob(...))` forcefully iterates over the entire directory tree just to get the first match, resulting in massive file I/O overhead (O(N)) for large datasets with many subdirectories.
 **Action:** Use `next(data_dir.glob(...), None)` to lazily evaluate the glob generator, stopping the recursive search immediately when the file is found (O(1) relative to matches), while maintaining the structural flexibility of searching across subdirectories.
+## 2026-11-08 - [Cache expensive pandas DataFrame operations]
+**Learning:** [pandas DataFrame operations like `std()`, `mean()`, etc. are expensive, and redundant calls should be cached instead of recomputing them.]
+**Action:** [When chaining conditions that use the same operation on a pandas DataFrame, cache the result to a local variable to avoid unnecessary processing.]

@@ -189,8 +189,10 @@ def attributes_sanity_check(df: pd.DataFrame):
     """
     # Проверка на NaN в стандартном отклонении атрибутов.
     attributes = []
-    if any(df.std() == 0.0) or any(df.std().isnull()):
-        for k, v in df.std().items():
+    # ⚡ Bolt: Cache df.std() to avoid redundant expensive computations
+    df_std = df.std()
+    if any(df_std == 0.0) or any(df_std.isnull()):
+        for k, v in df_std.items():
             if (v == 0) or (np.isnan(v)):
                 attributes.append(k)
     if attributes:
@@ -267,7 +269,7 @@ def infer_frequency(index: Union[pd.DatetimeIndex, np.ndarray]) -> str:
         native_frequency = f'1{native_frequency}'
 
     # pd.Timedelta не понимает еженедельные (W) частоты, поэтому мы преобразуем их в эквивалентное кратное 7D.
-    weekly_freq = re.match('(\d+)W(-(MON|TUE|WED|THU|FRI|SAT|SUN))?$', native_frequency)
+    weekly_freq = re.match(r'(\d+)W(-(MON|TUE|WED|THU|FRI|SAT|SUN))?$', native_frequency)
     if weekly_freq is not None:
         n = int(weekly_freq[1]) * 7
         native_frequency = f'{n}D'
