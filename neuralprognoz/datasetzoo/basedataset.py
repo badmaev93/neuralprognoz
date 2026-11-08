@@ -304,6 +304,8 @@ class BaseDataset(Dataset):
     def _load_additional_features(self):
         for file in self.cfg.additional_feature_files:
             with open(file, "rb") as fp:
+                LOGGER.warning("SECURITY WARNING: Loading a pickle file can execute arbitrary code. "
+                               "Ensure that the feature file comes from a trusted source.")
                 self.additional_features.append(pickle.load(fp))
 
     def _duplicate_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -431,6 +433,8 @@ class BaseDataset(Dataset):
                 self._save_xarray_dataset(xr)
         else:
             with self.cfg.train_data_file.open("rb") as fp:
+                LOGGER.warning("SECURITY WARNING: Loading a pickle file can execute arbitrary code. "
+                               "Ensure that the dataset file comes from a trusted source.")
                 d = pickle.load(fp)
             xr = xarray.Dataset.from_dict(d)
             if not self.frequencies:

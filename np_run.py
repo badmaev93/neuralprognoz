@@ -310,6 +310,8 @@ def create_evaluation_plots(run_dir: Path):
         logging.info(f"Загружаем результаты из: {results_path}")
 
         with open(results_path, 'rb') as f:
+            logging.warning("SECURITY WARNING: Loading a pickle file can execute arbitrary code. "
+                            "Ensure that the results file comes from a trusted source.")
             results_data = pickle.load(f)
 
         if metrics_path.exists():
