@@ -16,3 +16,7 @@
 ## 2026-11-08 - [Cache expensive pandas DataFrame operations]
 **Learning:** [pandas DataFrame operations like `std()`, `mean()`, etc. are expensive, and redundant calls should be cached instead of recomputing them.]
 **Action:** [When chaining conditions that use the same operation on a pandas DataFrame, cache the result to a local variable to avoid unnecessary processing.]
+
+## 2026-11-09 - Pandas Boolean Mask Indexing Bottleneck
+**Learning:** Using boolean masks (e.g., `df.loc[df.index == basin]`) to look up a single row by index inside a loop over many items (like basins) is an anti-pattern. The boolean mask evaluates against the entire index, changing what should be an O(1) hash map lookup into an O(N) operation per iteration. Over N items, this yields an $O(N^2)$ time complexity bottleneck.
+**Action:** Always use direct hash map index lookups like `df.loc[basin]` instead of boolean index comparisons when retrieving specific rows by index inside a loop.

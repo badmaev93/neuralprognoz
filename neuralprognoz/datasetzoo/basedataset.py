@@ -640,7 +640,8 @@ class BaseDataset(Dataset):
             else:
                 df = (df - self.scaler['attribute_means']) / self.scaler["attribute_stds"]
             for basin in self.basins:
-                attributes = df.loc[df.index == basin].values.flatten()
+                # ⚡ Bolt: Replace O(N) boolean mask indexing with O(1) hash map lookup
+                attributes = df.loc[basin].values.flatten()
                 self._attributes[basin] = torch.from_numpy(attributes.astype(np.float32))
 
     def _load_data(self):
