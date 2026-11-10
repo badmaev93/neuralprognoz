@@ -83,6 +83,7 @@ class BaseTrainer(object):
 
         self._set_random_seeds()
         self._set_device()
+        self.amp_scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == "cuda")
 
     def _get_dataset(self) -> BaseDataset:
         return get_dataset(cfg=self.cfg, period="train", is_train=True, scaler=self._scaler)
@@ -404,15 +405,16 @@ class BaseTrainer(object):
             data = self.model.pre_model_hook(data, is_train=True)
 
             # получить прогнозы
-            predictions = self.model(data)
+            with torch.cuda.amp.autocast(enabled=self.device.type == "cuda"):
+                predictions = self.model(data)
 
-            if self.noise_sampler_y is not None:
-                for key in filter(lambda k: 'y' in k, data.keys()):
-                    noise = self.noise_sampler_y.sample(data[key].shape)
-                    # убедиться что добавлен шум близкий к нулю к изначально близким к нулю целям
-                    data[key] += (data[key] + self._target_mean / self._target_std) * noise.to(self.device, non_blocking=True)
+                if self.noise_sampler_y is not None:
+                    for key in filter(lambda k: 'y' in k, data.keys()):
+                        noise = self.noise_sampler_y.sample(data[key].shape)
+                        # убедиться что добавлен шум близкий к нулю к изначально близким к нулю целям
+                        data[key] += (data[key] + self._target_mean / self._target_std) * noise.to(self.device, non_blocking=True)
 
-            loss, all_losses = self.loss_obj(predictions, data)
+                loss, all_losses = self.loss_obj(predictions, data)
 
             # early stop обучения если потери NaN
             if torch.isnan(loss):
@@ -427,13 +429,15 @@ class BaseTrainer(object):
                 self.optimizer.zero_grad(set_to_none=True)
 
                 # получить градиенты
-                loss.backward()
+                self.amp_scaler.scale(loss).backward()
 
                 if self.cfg.clip_gradient_norm is not None:
+                    self.amp_scaler.unscale_(self.optimizer)
                     torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.clip_gradient_norm)
 
                 # обновить веса
-                self.optimizer.step()
+                self.amp_scaler.step(self.optimizer)
+                self.amp_scaler.update()
 
             pbar.set_postfix_str(f"Loss: {loss.item():.4f}")
 

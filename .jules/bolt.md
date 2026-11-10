@@ -20,3 +20,7 @@
 ## 2026-11-09 - Pandas Boolean Mask Indexing Bottleneck
 **Learning:** Using boolean masks (e.g., `df.loc[df.index == basin]`) to look up a single row by index inside a loop over many items (like basins) is an anti-pattern. The boolean mask evaluates against the entire index, changing what should be an O(1) hash map lookup into an O(N) operation per iteration. Over N items, this yields an $O(N^2)$ time complexity bottleneck.
 **Action:** Always use direct hash map index lookups like `df.loc[basin]` instead of boolean index comparisons when retrieving specific rows by index inside a loop.
+
+## 2026-11-10 - PyTorch Automatic Mixed Precision (AMP)
+**Learning:** PyTorch models natively compute everything in FP32 precision. When training on GPUs, utilizing PyTorch AMP (Automatic Mixed Precision) via `torch.cuda.amp.autocast` and `torch.cuda.amp.GradScaler` can provide up to 2-3x speedup on Volta and newer architectures by leveraging Tensor Cores for matrix multiplications (performing them in FP16/BF16) and halving the memory bandwidth required for activations, all while maintaining FP32 stability using the GradScaler.
+**Action:** When training models, wrap the forward pass and loss computation in `autocast()`, and use `GradScaler` to scale the loss for the backward pass and unscale before optimizer stepping/gradient clipping.
