@@ -19,7 +19,12 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 NC_PATH    = os.path.join(BASE_DIR, "data/generic_dataset/time_series/KR.nc")
 OUT_DIR    = BASE_DIR
 
-TIMEGPT_API_KEY  = os.environ.get("TIMEGPT_API_KEY", "your_api_key_here")
+TIMEGPT_API_KEY = os.environ.get("TIMEGPT_API_KEY")
+if not TIMEGPT_API_KEY:
+    # Security: Do not use hardcoded fallbacks for API keys.
+    # Fail fast securely by raising an error if the key is missing.
+    raise ValueError("TIMEGPT_API_KEY environment variable is missing.")
+
 MODEL            = "timegpt-1-long-horizon"   # длинный горизонт; "timegpt-1" — короткий
 HORIZON          = 9                          # январь…сентябрь
 FINETUNE_STEPS   = 50                         # 0 — zero-shot, >0 — fine-tuning
